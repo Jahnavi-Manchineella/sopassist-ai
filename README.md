@@ -9,9 +9,6 @@ The system improves operational efficiency, reduces dependency on subject matter
 
 # 🚀 Live Demo
 
-*(Add your public website link here after deployment)*
-
-Example:
 
 https://sopassist-ai.lovable.app
 
@@ -325,25 +322,29 @@ sopassist-ai
 
 ---
 
-# 🛠️ Tech Stack
+## 🛠️ Tech Stack
 
-Frontend
+**User Interface (UI)**  
+- React  
+- Vite  
+- TypeScript  
+- Tailwind CSS  
+- shadcn UI  
 
-• React
-• Vite
-• TypeScript
-• Tailwind CSS
-• shadcn UI
+**Backend & Services**  
+- Supabase (PostgreSQL)  
+- Supabase Edge Functions  
 
-Backend / Services
+**AI Layer**  
+- Lovable AI (Google Gemini)
 
-• Supabase
+**RAG & Search Pipeline**  
+- Postgres Full-Text Search  
+- search_chunks RPC retrieval  
 
-AI / ML
-
-• Retrieval Augmented Generation (RAG)
-• Vector search
-• Large Language Models
+**Security**  
+- Role-Based Access Control (RBAC)  
+- Audit Logs
 
 ---
 
