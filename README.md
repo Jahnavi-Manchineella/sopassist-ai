@@ -18,11 +18,11 @@ https://sopassist-ai.lovable.app
 
 Banking operations teams often struggle with:
 
-• Fragmented knowledge across SOP documents
-• Difficulty finding compliance information quickly
-• Heavy reliance on subject matter experts
-• Slow query resolution
-• Inconsistent responses across teams
+- Fragmented knowledge across SOP documents
+- Difficulty finding compliance information quickly
+- Heavy reliance on subject matter experts
+- Slow query resolution
+- Inconsistent responses across teams
 
 SOPAssist AI addresses these challenges by providing a **centralized AI-powered knowledge retrieval assistant**.
 
@@ -34,11 +34,11 @@ The chatbot uses **Retrieval Augmented Generation (RAG)** to ensure answers come
 
 Workflow:
 
-1️⃣ Knowledge documents (SOPs, policies) are uploaded
-2️⃣ Documents are split into chunks
-3️⃣ Embeddings are generated for semantic search
-4️⃣ Relevant document sections are retrieved
-5️⃣ The AI generates an answer grounded in the retrieved content
+- 1️⃣ Knowledge documents (SOPs, policies) are uploaded
+- 2️⃣ Documents are split into chunks
+- 3️⃣ Embeddings are generated for semantic search
+- 4️⃣ Relevant document sections are retrieved
+- 5️⃣ The AI generates an answer grounded in the retrieved content
 
 This ensures **accurate and context-aware responses**.
 
