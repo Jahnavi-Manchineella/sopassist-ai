@@ -16,6 +16,12 @@ interface Doc {
 }
 
 const CATEGORIES = ["Compliance", "SOP", "Products", "General Operations"];
+const ACCEPTED_TYPES = ".txt,.pdf,.docx";
+const ALLOWED_MIME: Record<string, string> = {
+  "text/plain": "txt",
+  "application/pdf": "pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+};
 
 export default function Documents() {
   const { isAdmin } = useAuth();
@@ -41,49 +47,60 @@ export default function Documents() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ["text/plain"];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Only .txt files are supported in this demo");
+    const fileExt = ALLOWED_MIME[file.type];
+    if (!fileExt) {
+      toast.error("Only .txt, .pdf, and .docx files are supported");
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("File size must be under 20MB");
       return;
     }
 
     setUploading(true);
     try {
-      const content = await file.text();
+      if (fileExt === "txt") {
+        // Handle TXT files directly (no edge function needed)
+        const content = await file.text();
+        const { data: doc, error } = await supabase
+          .from("documents")
+          .insert({ name: file.name, file_type: "txt", category: selectedCategory, content })
+          .select()
+          .single();
+        if (error) throw error;
 
-      // Insert document
-      const { data: doc, error } = await supabase
-        .from("documents")
-        .insert({
-          name: file.name,
-          file_type: "txt",
-          category: selectedCategory,
-          content,
-        })
-        .select()
-        .single();
+        const paragraphs = content.split(/\n\n+/).filter((p) => p.trim().length > 30);
+        const chunks = paragraphs.map((p, i) => {
+          const firstLine = p.split("\n")[0];
+          const isTitle = firstLine.length < 100 && !firstLine.endsWith(".");
+          return { document_id: doc.id, chunk_index: i, content: p.trim(), section_title: isTitle ? firstLine.trim() : null };
+        });
+        if (chunks.length > 0) await supabase.from("document_chunks").insert(chunks);
+        toast.success(`Uploaded "${file.name}" with ${chunks.length} chunks`);
+      } else {
+        // Use edge function for PDF/DOCX
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("category", selectedCategory);
 
-      if (error) throw error;
+        const { data: { session } } = await supabase.auth.getSession();
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        const res = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/parse-document`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session?.access_token}`,
+            },
+            body: formData,
+          }
+        );
 
-      // Chunk the document by paragraphs
-      const paragraphs = content.split(/\n\n+/).filter((p) => p.trim().length > 50);
-      const chunks = paragraphs.map((p, i) => {
-        // Try to extract section title
-        const firstLine = p.split("\n")[0];
-        const isTitle = firstLine.length < 100 && !firstLine.endsWith(".");
-        return {
-          document_id: doc.id,
-          chunk_index: i,
-          content: p.trim(),
-          section_title: isTitle ? firstLine.trim() : null,
-        };
-      });
-
-      if (chunks.length > 0) {
-        await supabase.from("document_chunks").insert(chunks);
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Upload failed");
+        toast.success(`Uploaded "${file.name}" with ${result.chunks} chunks extracted`);
       }
-
-      toast.success(`Uploaded "${file.name}" with ${chunks.length} chunks`);
       loadDocs();
     } catch (err: any) {
       toast.error(err.message || "Upload failed");
@@ -132,7 +149,7 @@ export default function Documents() {
               <label className="cursor-pointer">
                 <input
                   type="file"
-                  accept=".txt"
+                  accept={ACCEPTED_TYPES}
                   onChange={handleFileUpload}
                   className="hidden"
                   disabled={uploading}
