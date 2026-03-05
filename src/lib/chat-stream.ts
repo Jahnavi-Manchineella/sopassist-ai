@@ -16,6 +16,7 @@ export async function streamChat({
   messages,
   conversationId,
   accessToken,
+  category,
   onDelta,
   onCitations,
   onDone,
@@ -24,6 +25,7 @@ export async function streamChat({
   messages: ChatMessage[];
   conversationId?: string;
   accessToken: string;
+  category?: string;
   onDelta: (text: string) => void;
   onCitations: (citations: Citation[], category: string) => void;
   onDone: () => void;
@@ -36,7 +38,7 @@ export async function streamChat({
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ messages, conversationId }),
+      body: JSON.stringify({ messages, conversationId, category }),
     });
 
     if (resp.status === 429) {

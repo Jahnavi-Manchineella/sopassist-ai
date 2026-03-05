@@ -38,6 +38,8 @@ serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const category = (formData.get("category") as string) || "General Operations";
+    const parentDocId = formData.get("parent_document_id") as string | null;
+    const version = parseInt((formData.get("version") as string) || "1", 10);
 
     if (!file) throw new Error("No file provided");
 
@@ -129,6 +131,9 @@ serve(async (req) => {
         category,
         content: extractedText,
         uploaded_by: user.id,
+        version,
+        is_latest: true,
+        parent_document_id: parentDocId,
       })
       .select()
       .single();

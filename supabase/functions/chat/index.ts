@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, conversationId } = await req.json();
+    const { messages, conversationId, category: userCategory } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -31,25 +31,50 @@ serve(async (req) => {
       userId = user?.id || null;
     }
 
-    // Extract keywords from last user message for simple RAG
     const lastUserMessage = messages[messages.length - 1]?.content || "";
-    const stopWords = new Set(["the", "is", "at", "which", "on", "a", "an", "and", "or", "but", "in", "to", "for", "of", "with", "what", "how", "does", "are", "can", "do", "this", "that", "from", "about"]);
-    const keywords = lastUserMessage
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, "")
-      .split(/\s+/)
-      .filter((w: string) => w.length > 2 && !stopWords.has(w))
-      .slice(0, 6);
 
+    // Use full-text search via the search_chunks function
     let relevantChunks: any[] = [];
-    if (keywords.length > 0) {
-      const orFilter = keywords.map((k: string) => `content.ilike.%${k}%`).join(",");
-      const { data: chunks } = await supabase
-        .from("document_chunks")
-        .select("content, section_title, document_id, documents(name, category)")
-        .or(orFilter)
-        .limit(5);
-      relevantChunks = chunks || [];
+    const categoryFilter = userCategory && userCategory !== "All" ? userCategory : null;
+
+    const { data: chunks, error: searchError } = await supabase.rpc("search_chunks", {
+      query_text: lastUserMessage,
+      category_filter: categoryFilter,
+      match_limit: 5,
+    });
+
+    if (searchError) {
+      console.error("search_chunks error:", searchError);
+    }
+    relevantChunks = chunks || [];
+
+    // If full-text search returns nothing, fall back to keyword ilike
+    if (relevantChunks.length === 0) {
+      const stopWords = new Set(["the", "is", "at", "which", "on", "a", "an", "and", "or", "but", "in", "to", "for", "of", "with", "what", "how", "does", "are", "can", "do", "this", "that", "from", "about"]);
+      const keywords = lastUserMessage
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, "")
+        .split(/\s+/)
+        .filter((w: string) => w.length > 2 && !stopWords.has(w))
+        .slice(0, 6);
+
+      if (keywords.length > 0) {
+        const orFilter = keywords.map((k: string) => `content.ilike.%${k}%`).join(",");
+        let query = supabase
+          .from("document_chunks")
+          .select("content, section_title, document_id, documents(name, category)")
+          .or(orFilter)
+          .limit(5);
+
+        const { data: fallbackChunks } = await query;
+        relevantChunks = (fallbackChunks || []).map((c: any) => ({
+          chunk_content: c.content,
+          chunk_section_title: c.section_title,
+          chunk_document_id: c.document_id,
+          doc_name: c.documents?.name || "Unknown",
+          doc_category: c.documents?.category || "General Operations",
+        }));
+      }
     }
 
     // Build context and citations
@@ -58,25 +83,28 @@ serve(async (req) => {
     if (relevantChunks.length > 0) {
       contextStr = "\n\nRelevant document excerpts:\n";
       relevantChunks.forEach((chunk: any, i: number) => {
-        const docName = chunk.documents?.name || "Unknown";
-        const docCat = chunk.documents?.category || "General Operations";
-        const section = chunk.section_title || "General";
-        contextStr += `\n[Source ${i + 1}: ${docName}, Section: ${section}]\n${chunk.content}\n`;
+        const docName = chunk.doc_name || "Unknown";
+        const docCat = chunk.doc_category || "General Operations";
+        const section = chunk.chunk_section_title || "General";
+        const content = chunk.chunk_content || chunk.content || "";
+        contextStr += `\n[Source ${i + 1}: ${docName}, Section: ${section}]\n${content}\n`;
         citations.push({
           source: docName,
           section,
-          content: chunk.content.substring(0, 200),
+          content: content.substring(0, 200),
           category: docCat,
         });
       });
     }
 
     // Categorize query
-    let category = "General Operations";
-    const lowerQuery = lastUserMessage.toLowerCase();
-    if (/compliance|regulation|policy|aml|kyc|audit|gdpr/.test(lowerQuery)) category = "Compliance";
-    else if (/procedure|process|step|sop|how to|workflow/.test(lowerQuery)) category = "SOP";
-    else if (/product|account|loan|card|deposit|mortgage|savings/.test(lowerQuery)) category = "Products";
+    let category = userCategory && userCategory !== "All" ? userCategory : "General Operations";
+    if (category === "General Operations") {
+      const lowerQuery = lastUserMessage.toLowerCase();
+      if (/compliance|regulation|policy|aml|kyc|audit|gdpr/.test(lowerQuery)) category = "Compliance";
+      else if (/procedure|process|step|sop|how to|workflow/.test(lowerQuery)) category = "SOP";
+      else if (/product|account|loan|card|deposit|mortgage|savings/.test(lowerQuery)) category = "Products";
+    }
 
     const systemPrompt = `You are a Banking AI Knowledge Assistant for internal banking operations teams. You help answer questions about banking procedures, compliance, products, and operations based on internal documents.
 
@@ -87,7 +115,8 @@ Guidelines:
 - Always cite sources when available using [Source N] format
 - If information is not in the provided documents, say so clearly
 - Structure responses with clear headings and bullet points when appropriate
-- Focus on actionable, practical answers for banking operations teams`;
+- Focus on actionable, practical answers for banking operations teams
+- You are informational only - never suggest taking automated actions`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

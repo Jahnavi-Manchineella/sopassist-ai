@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { streamChat, ChatMessage, Citation } from "@/lib/chat-stream";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { Bot, Plus, MessageSquare, FileText, X, ChevronRight } from "lucide-react";
+import { Bot, Plus, MessageSquare, FileText, X, ChevronRight, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+const DOMAIN_CATEGORIES = ["All", "Compliance", "SOP", "Products", "General Operations"];
 
 interface ConversationMeta {
   id: string;
@@ -30,6 +32,7 @@ export default function Chat() {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [showCitations, setShowCitations] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [selectedDomain, setSelectedDomain] = useState("All");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load conversations
@@ -133,6 +136,7 @@ export default function Chat() {
         messages: chatHistory,
         conversationId: convId,
         accessToken: session.access_token,
+        category: selectedDomain,
         onDelta: (chunk) => {
           assistantContent += chunk;
           setMessages((prev) => {
@@ -161,7 +165,6 @@ export default function Chat() {
               category: msgCategory,
             });
           }
-          // Update conversation timestamp
           await supabase
             .from("conversations")
             .update({ updated_at: new Date().toISOString() })
@@ -173,7 +176,7 @@ export default function Chat() {
         },
       });
     },
-    [user, session, activeConversationId, messages, isStreaming]
+    [user, session, activeConversationId, messages, isStreaming, selectedDomain]
   );
 
   const startNewChat = () => {
@@ -223,13 +226,30 @@ export default function Chat() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-          <button
-            onClick={() => setShowSidebar(!showSidebar)}
-            className="text-muted-foreground hover:text-foreground p-1"
-          >
-            <MessageSquare className="w-4 h-4" />
-          </button>
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="text-muted-foreground hover:text-foreground p-1"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
+
+            {/* Domain selector */}
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <select
+                value={selectedDomain}
+                onChange={(e) => setSelectedDomain(e.target.value)}
+                className="text-xs bg-secondary/60 border border-border/50 rounded-md px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+              >
+                {DOMAIN_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {citations.length > 0 && (
             <button
               onClick={() => setShowCitations(!showCitations)}
@@ -251,6 +271,11 @@ export default function Chat() {
               <h2 className="text-lg font-semibold text-foreground mb-1">Banking AI Assistant</h2>
               <p className="text-sm text-muted-foreground max-w-md">
                 Ask me about banking procedures, compliance policies, customer onboarding, or any operational topic.
+                {selectedDomain !== "All" && (
+                  <span className="block mt-1 text-accent">
+                    Filtering: <strong>{selectedDomain}</strong>
+                  </span>
+                )}
               </p>
               <div className="flex flex-wrap gap-2 mt-6 max-w-lg justify-center">
                 {[
