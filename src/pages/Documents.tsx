@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, Trash2, Search } from "lucide-react";
+import { Upload, FileText, Trash2, Search, History, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 interface Doc {
@@ -13,6 +13,9 @@ interface Doc {
   category: string;
   created_at: string;
   content: string | null;
+  version: number;
+  is_latest: boolean;
+  parent_document_id: string | null;
 }
 
 const CATEGORIES = ["Compliance", "SOP", "Products", "General Operations"];
@@ -30,20 +33,35 @@ export default function Documents() {
   const [uploading, setUploading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("SOP");
   const [previewDoc, setPreviewDoc] = useState<Doc | null>(null);
+  const [showVersions, setShowVersions] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<Doc[]>([]);
 
   const loadDocs = async () => {
     const { data } = await supabase
       .from("documents")
-      .select("id, name, file_type, category, created_at, content")
+      .select("id, name, file_type, category, created_at, content, version, is_latest, parent_document_id")
+      .eq("is_latest", true)
       .order("created_at", { ascending: false });
-    setDocuments(data || []);
+    setDocuments((data as Doc[]) || []);
   };
 
   useEffect(() => {
     loadDocs();
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const loadVersionHistory = async (doc: Doc) => {
+    // Find root document id
+    const rootId = doc.parent_document_id || doc.id;
+    const { data } = await supabase
+      .from("documents")
+      .select("id, name, file_type, category, created_at, content, version, is_latest, parent_document_id")
+      .or(`id.eq.${rootId},parent_document_id.eq.${rootId}`)
+      .order("version", { ascending: false });
+    setVersionHistory((data as Doc[]) || []);
+    setShowVersions(true);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, replaceDocId?: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -60,12 +78,32 @@ export default function Documents() {
 
     setUploading(true);
     try {
+      // If replacing, mark old version as not latest and get its version number
+      let newVersion = 1;
+      let parentId: string | null = null;
+      if (replaceDocId) {
+        const oldDoc = documents.find((d) => d.id === replaceDocId);
+        if (oldDoc) {
+          newVersion = oldDoc.version + 1;
+          parentId = oldDoc.parent_document_id || oldDoc.id;
+          await supabase.from("documents").update({ is_latest: false } as any).eq("id", replaceDocId);
+        }
+      }
+
       if (fileExt === "txt") {
-        // Handle TXT files directly (no edge function needed)
         const content = await file.text();
+        const insertData: any = {
+          name: file.name,
+          file_type: "txt",
+          category: selectedCategory,
+          content,
+          version: newVersion,
+          is_latest: true,
+          parent_document_id: parentId,
+        };
         const { data: doc, error } = await supabase
           .from("documents")
-          .insert({ name: file.name, file_type: "txt", category: selectedCategory, content })
+          .insert(insertData)
           .select()
           .single();
         if (error) throw error;
@@ -77,12 +115,13 @@ export default function Documents() {
           return { document_id: doc.id, chunk_index: i, content: p.trim(), section_title: isTitle ? firstLine.trim() : null };
         });
         if (chunks.length > 0) await supabase.from("document_chunks").insert(chunks);
-        toast.success(`Uploaded "${file.name}" with ${chunks.length} chunks`);
+        toast.success(`Uploaded "${file.name}" v${newVersion} with ${chunks.length} chunks`);
       } else {
-        // Use edge function for PDF/DOCX
         const formData = new FormData();
         formData.append("file", file);
         formData.append("category", selectedCategory);
+        if (parentId) formData.append("parent_document_id", parentId);
+        formData.append("version", String(newVersion));
 
         const { data: { session } } = await supabase.auth.getSession();
         const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
@@ -99,9 +138,10 @@ export default function Documents() {
 
         const result = await res.json();
         if (!res.ok) throw new Error(result.error || "Upload failed");
-        toast.success(`Uploaded "${file.name}" with ${result.chunks} chunks extracted`);
+        toast.success(`Uploaded "${file.name}" v${newVersion} with ${result.chunks} chunks`);
       }
       loadDocs();
+      setShowVersions(false);
     } catch (err: any) {
       toast.error(err.message || "Upload failed");
     } finally {
@@ -150,7 +190,7 @@ export default function Documents() {
                 <input
                   type="file"
                   accept={ACCEPTED_TYPES}
-                  onChange={handleFileUpload}
+                  onChange={(e) => handleFileUpload(e)}
                   className="hidden"
                   disabled={uploading}
                 />
@@ -196,25 +236,62 @@ export default function Documents() {
                     <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent">
                       {doc.category}
                     </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-mono">
+                      v{doc.version}
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {new Date(doc.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 </div>
               </div>
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive flex-shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(doc.id);
-                  }}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {isAdmin && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-primary"
+                      title="Version history"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        loadVersionHistory(doc);
+                      }}
+                    >
+                      <History className="w-4 h-4" />
+                    </Button>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept={ACCEPTED_TYPES}
+                        onChange={(e) => handleFileUpload(e, doc.id)}
+                        className="hidden"
+                        disabled={uploading}
+                      />
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-accent"
+                        title="Upload new version"
+                      >
+                        <span><RefreshCw className="w-4 h-4" /></span>
+                      </Button>
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(doc.id);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
           {filtered.length === 0 && (
@@ -225,12 +302,55 @@ export default function Documents() {
         </div>
       </div>
 
+      {/* Version history panel */}
+      {showVersions && (
+        <div className="w-80 border-l border-border bg-card/40 flex flex-col">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+              <History className="w-4 h-4 text-accent" /> Version History
+            </h3>
+            <button onClick={() => setShowVersions(false)} className="text-muted-foreground hover:text-foreground">
+              <span className="text-lg">×</span>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {versionHistory.map((v) => (
+              <div
+                key={v.id}
+                onClick={() => setPreviewDoc(v)}
+                className={`glass-panel rounded-lg p-3 cursor-pointer hover:border-primary/30 transition-colors ${
+                  v.is_latest ? "border-accent/30" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono bg-primary/15 text-primary px-1.5 py-0.5 rounded">
+                    v{v.version}
+                  </span>
+                  {v.is_latest && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                      Latest
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-foreground mt-1 truncate">{v.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(v.created_at).toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Document preview */}
-      {previewDoc && (
+      {previewDoc && !showVersions && (
         <div className="w-96 border-l border-border bg-card/40 flex flex-col">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-medium text-foreground">{previewDoc.name}</h3>
-            <span className="text-xs text-accent">{previewDoc.category}</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-accent">{previewDoc.category}</span>
+              <span className="text-xs font-mono text-primary">v{previewDoc.version}</span>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed">

@@ -73,6 +73,7 @@ export type Database = {
           chunk_index: number
           content: string
           document_id: string
+          fts: unknown
           id: string
           section_title: string | null
         }
@@ -80,6 +81,7 @@ export type Database = {
           chunk_index: number
           content: string
           document_id: string
+          fts?: unknown
           id?: string
           section_title?: string | null
         }
@@ -87,6 +89,7 @@ export type Database = {
           chunk_index?: number
           content?: string
           document_id?: string
+          fts?: unknown
           id?: string
           section_title?: string | null
         }
@@ -107,8 +110,11 @@ export type Database = {
           created_at: string | null
           file_type: string
           id: string
+          is_latest: boolean
           name: string
+          parent_document_id: string | null
           uploaded_by: string | null
+          version: number
         }
         Insert: {
           category?: string
@@ -116,8 +122,11 @@ export type Database = {
           created_at?: string | null
           file_type: string
           id?: string
+          is_latest?: boolean
           name: string
+          parent_document_id?: string | null
           uploaded_by?: string | null
+          version?: number
         }
         Update: {
           category?: string
@@ -125,10 +134,21 @@ export type Database = {
           created_at?: string | null
           file_type?: string
           id?: string
+          is_latest?: boolean
           name?: string
+          parent_document_id?: string | null
           uploaded_by?: string | null
+          version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "documents_parent_document_id_fkey"
+            columns: ["parent_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -221,6 +241,22 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      search_chunks: {
+        Args: {
+          category_filter?: string
+          match_limit?: number
+          query_text: string
+        }
+        Returns: {
+          chunk_content: string
+          chunk_document_id: string
+          chunk_id: string
+          chunk_section_title: string
+          doc_category: string
+          doc_name: string
+          rank: number
+        }[]
       }
     }
     Enums: {
