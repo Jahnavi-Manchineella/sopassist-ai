@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bot, Shield, User } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -23,10 +23,34 @@ export default function Login() {
     setLoading(true);
     try {
       if (isSignUp) {
+        if (activeTab === "admin") {
+          toast.error("Admin accounts cannot be created via sign-up.");
+          setLoading(false);
+          return;
+        }
         await signUp(email, password, fullName);
         toast.success("Account created! Please check your email to verify.");
       } else {
         await signIn(email, password);
+
+        // If logging in via Admin tab, verify admin role
+        if (activeTab === "admin") {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: roles } = await supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", user.id);
+            const hasAdmin = roles?.some((r) => r.role === "admin") ?? false;
+            if (!hasAdmin) {
+              await supabase.auth.signOut();
+              toast.error("Access denied. You do not have administrator privileges.");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
         toast.success(activeTab === "admin" ? "Welcome back, Admin!" : "Welcome back!");
       }
       navigate("/chat");
