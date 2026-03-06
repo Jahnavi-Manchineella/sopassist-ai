@@ -16,9 +16,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const navItems = [
     { to: "/chat", icon: MessageSquare, label: "Chat" },
-    { to: "/documents", icon: FileText, label: "Documents" },
     ...(isAdmin
-      ? [{ to: "/analytics", icon: BarChart3, label: "Analytics" }]
+      ? [
+          { to: "/documents", icon: FileText, label: "Documents" },
+          { to: "/analytics", icon: BarChart3, label: "Analytics" },
+        ]
       : []),
   ];
 
