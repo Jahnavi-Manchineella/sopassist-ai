@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Chat from "./pages/Chat";
 import Documents from "./pages/Documents";
 import Analytics from "./pages/Analytics";
+import DiagramGenerator from "./pages/DiagramGenerator";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/diagram" element={<ProtectedRoute><DiagramGenerator /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
