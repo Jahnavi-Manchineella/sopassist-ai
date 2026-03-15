@@ -11,6 +11,7 @@ import Chat from "./pages/Chat";
 import Documents from "./pages/Documents";
 import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
+import Presentation from "./pages/Presentation";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
             <Route path="/documents" element={<AdminRoute><Documents /></AdminRoute>} />
             <Route path="/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
+            <Route path="/presentation" element={<Presentation />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
