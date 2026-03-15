@@ -11,6 +11,7 @@ import Chat from "./pages/Chat";
 import Documents from "./pages/Documents";
 import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
+import Presentation from "./pages/Presentation";
 
 const queryClient = new QueryClient();
 
