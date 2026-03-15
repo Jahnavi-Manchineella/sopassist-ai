@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Maximize, Minimize, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, Minimize, Home, Download } from "lucide-react";
 import { Link } from "react-router-dom";
+import { downloadPptx } from "@/lib/generate-pptx";
 
 const TOTAL_SLIDES = 12;
 
@@ -518,6 +519,9 @@ export default function Presentation() {
         </button>
         <button onClick={toggleFullscreen} className="text-muted-foreground hover:text-foreground transition-colors">
           {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+        </button>
+        <button onClick={() => downloadPptx()} className="text-muted-foreground hover:text-foreground transition-colors" title="Download PPTX">
+          <Download className="w-4 h-4" />
         </button>
       </div>
 
