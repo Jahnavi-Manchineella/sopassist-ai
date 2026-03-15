@@ -46,17 +46,25 @@ serve(async (req) => {
     const fileName = file.name;
     const fileExt = fileName.split(".").pop()?.toLowerCase() || "";
 
-    if (!["pdf", "docx", "txt"].includes(fileExt)) {
-      throw new Error("Unsupported file type. Use PDF, DOCX, or TXT.");
+    const supportedExts = ["pdf", "docx", "txt", "jpg", "jpeg", "png", "webp", "eml", "msg", "csv", "xlsx", "xls"];
+    if (!supportedExts.includes(fileExt)) {
+      throw new Error(`Unsupported file type "${fileExt}". Supported: PDF, DOCX, TXT, JPG, PNG, WEBP, EML, MSG, CSV, XLSX, XLS`);
     }
 
     let extractedText = "";
 
     if (fileExt === "txt") {
       extractedText = await file.text();
+    } else if (fileExt === "csv") {
+      // CSV: read as text and format for chunking
+      const csvText = await file.text();
+      extractedText = `CSV Data: ${fileName}\n\n${csvText}`;
+    } else if (fileExt === "eml") {
+      // EML: parse email text format
+      const emlText = await file.text();
+      extractedText = parseEml(emlText);
     } else {
-      // For PDF and DOCX, use Lovable AI to extract text from the file
-      // First, read the file as base64
+      // For PDF, DOCX, images, MSG, XLSX/XLS — use AI multimodal extraction
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let binary = "";
@@ -65,9 +73,34 @@ serve(async (req) => {
       }
       const base64 = btoa(binary);
 
-      const mimeType = fileExt === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const mimeMap: Record<string, string> = {
+        pdf: "application/pdf",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        webp: "image/webp",
+        msg: "application/vnd.ms-outlook",
+        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        xls: "application/vnd.ms-excel",
+      };
+      const mimeType = mimeMap[fileExt] || "application/octet-stream";
 
-      // Use Gemini's multimodal capability to extract text from the document
+      // Customize prompt based on file type
+      let systemPrompt = "You are a document text extraction tool. Extract ALL text content from the provided document exactly as it appears. Preserve paragraph structure using double newlines between paragraphs. Preserve section headings. Do NOT summarize, interpret, or add commentary. Output ONLY the extracted text.";
+      let userPrompt = "Extract all text content from this document. Preserve the structure with section headings and paragraphs.";
+
+      if (["jpg", "jpeg", "png", "webp"].includes(fileExt)) {
+        systemPrompt = "You are an image content extraction tool. Extract ALL visible text from this image. If the image contains diagrams, charts, or visual information, describe them in detail. Preserve the structure of the content. Output ONLY the extracted information.";
+        userPrompt = "Extract all text and describe any visual content (charts, diagrams, tables) from this image in detail.";
+      } else if (fileExt === "msg") {
+        systemPrompt = "You are an email extraction tool. Extract the email content including: From, To, CC, Subject, Date, and the full email body. Preserve the structure. If there are attachments listed, note their names. Output ONLY the extracted content.";
+        userPrompt = "Extract all email content from this file: headers (From, To, CC, Subject, Date) and the full body text.";
+      } else if (["xlsx", "xls"].includes(fileExt)) {
+        systemPrompt = "You are a spreadsheet extraction tool. Extract ALL data from this spreadsheet. Format it as structured text with clear headers and rows. Preserve sheet names if visible. Use table format where possible. Output ONLY the extracted data.";
+        userPrompt = "Extract all data from this spreadsheet. Preserve column headers and row data in a readable structured format.";
+      }
+
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -77,23 +110,15 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            {
-              role: "system",
-              content: "You are a document text extraction tool. Extract ALL text content from the provided document exactly as it appears. Preserve paragraph structure using double newlines between paragraphs. Preserve section headings. Do NOT summarize, interpret, or add commentary. Output ONLY the extracted text.",
-            },
+            { role: "system", content: systemPrompt },
             {
               role: "user",
               content: [
                 {
                   type: "image_url",
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64}`,
-                  },
+                  image_url: { url: `data:${mimeType};base64,${base64}` },
                 },
-                {
-                  type: "text",
-                  text: "Extract all text content from this document. Preserve the structure with section headings and paragraphs.",
-                },
+                { type: "text", text: userPrompt },
               ],
             },
           ],
@@ -104,14 +129,14 @@ serve(async (req) => {
       if (!aiResponse.ok) {
         const errText = await aiResponse.text();
         console.error("AI extraction error:", aiResponse.status, errText);
-        throw new Error(`Failed to extract text from ${fileExt.toUpperCase()} file. AI error: ${aiResponse.status}`);
+        throw new Error(`Failed to extract content from ${fileExt.toUpperCase()} file. AI error: ${aiResponse.status}`);
       }
 
       const aiData = await aiResponse.json();
       extractedText = aiData.choices?.[0]?.message?.content || "";
 
       if (!extractedText.trim()) {
-        throw new Error("No text could be extracted from the document");
+        throw new Error("No content could be extracted from the document");
       }
     }
 
@@ -122,12 +147,17 @@ serve(async (req) => {
       upsert: false,
     });
 
+    // Determine file_type label
+    const fileTypeLabel = ["jpg", "jpeg", "png", "webp"].includes(fileExt) ? "image" :
+      ["eml", "msg"].includes(fileExt) ? "email" :
+      ["csv", "xlsx", "xls"].includes(fileExt) ? "spreadsheet" : fileExt;
+
     // Insert document record
     const { data: doc, error: insertErr } = await supabase
       .from("documents")
       .insert({
         name: fileName,
-        file_type: fileExt,
+        file_type: fileTypeLabel,
         category,
         content: extractedText,
         uploaded_by: user.id,
@@ -177,3 +207,34 @@ serve(async (req) => {
     });
   }
 });
+
+// Simple EML parser for text-based email files
+function parseEml(emlText: string): string {
+  const lines = emlText.split(/\r?\n/);
+  let headers: string[] = [];
+  let bodyStart = false;
+  let body: string[] = [];
+
+  for (const line of lines) {
+    if (!bodyStart) {
+      if (line.trim() === "") {
+        bodyStart = true;
+        continue;
+      }
+      const headerMatch = line.match(/^(From|To|Cc|Subject|Date):\s*(.+)/i);
+      if (headerMatch) {
+        headers.push(`${headerMatch[1]}: ${headerMatch[2]}`);
+      }
+    } else {
+      body.push(line);
+    }
+  }
+
+  // Strip HTML tags from body if present
+  let bodyText = body.join("\n");
+  if (bodyText.includes("<html") || bodyText.includes("<HTML")) {
+    bodyText = bodyText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  return `Email Headers:\n${headers.join("\n")}\n\nEmail Body:\n${bodyText}`;
+}
