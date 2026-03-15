@@ -25,17 +25,18 @@ interface UIMessage {
 
 export default function Chat() {
   const { user, session } = useAuth();
+  const isAuthenticated = !!user && !!session;
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [showCitations, setShowCitations] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(isAuthenticated);
   const [selectedDomain, setSelectedDomain] = useState("All");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations
+  // Load conversations (only for authenticated users)
   useEffect(() => {
     if (!user) return;
     const load = async () => {
@@ -105,10 +106,11 @@ export default function Chat() {
 
   const handleSend = useCallback(
     async (input: string) => {
-      if (!user || !session?.access_token || isStreaming) return;
+      if (isStreaming) return;
 
+      // For authenticated users, persist conversations
       let convId = activeConversationId;
-      if (!convId) {
+      if (isAuthenticated && !convId) {
         const title = input.slice(0, 50) + (input.length > 50 ? "..." : "");
         convId = await createConversation(title);
         if (!convId) {
@@ -120,7 +122,9 @@ export default function Chat() {
 
       const userMsg: UIMessage = { role: "user", content: input };
       setMessages((prev) => [...prev, userMsg]);
-      await saveMessage(convId, userMsg);
+      if (isAuthenticated && convId) {
+        await saveMessage(convId, userMsg);
+      }
 
       setIsStreaming(true);
       let assistantContent = "";
@@ -132,10 +136,13 @@ export default function Chat() {
         { role: "user" as const, content: input },
       ];
 
+      // Use session token if available, otherwise use anon key
+      const accessToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
       await streamChat({
         messages: chatHistory,
-        conversationId: convId,
-        accessToken: session.access_token,
+        conversationId: convId || undefined,
+        accessToken,
         category: selectedDomain,
         onDelta: (chunk) => {
           assistantContent += chunk;
@@ -157,18 +164,18 @@ export default function Chat() {
         },
         onDone: async () => {
           setIsStreaming(false);
-          if (assistantContent && convId) {
+          if (isAuthenticated && assistantContent && convId) {
             await saveMessage(convId, {
               role: "assistant",
               content: assistantContent,
               citations: msgCitations,
               category: msgCategory,
             });
+            await supabase
+              .from("conversations")
+              .update({ updated_at: new Date().toISOString() })
+              .eq("id", convId!);
           }
-          await supabase
-            .from("conversations")
-            .update({ updated_at: new Date().toISOString() })
-            .eq("id", convId!);
         },
         onError: (err) => {
           setIsStreaming(false);
@@ -176,7 +183,7 @@ export default function Chat() {
         },
       });
     },
-    [user, session, activeConversationId, messages, isStreaming, selectedDomain]
+    [user, session, activeConversationId, messages, isStreaming, selectedDomain, isAuthenticated]
   );
 
   const startNewChat = () => {
@@ -188,8 +195,8 @@ export default function Chat() {
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* Conversations sidebar */}
-      {showSidebar && (
+      {/* Conversations sidebar - only for authenticated users */}
+      {isAuthenticated && showSidebar && (
         <div className="w-64 flex-shrink-0 border-r border-border flex flex-col bg-card/40">
           <div className="p-3 border-b border-border">
             <Button
@@ -228,12 +235,14 @@ export default function Chat() {
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-3">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="text-muted-foreground hover:text-foreground p-1"
-            >
-              <MessageSquare className="w-4 h-4" />
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="text-muted-foreground hover:text-foreground p-1"
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Domain selector */}
             <div className="flex items-center gap-1.5">

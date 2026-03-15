@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bot, MessageSquare, FileText, BarChart3, LogOut, Shield } from "lucide-react";
+import { Bot, MessageSquare, FileText, BarChart3, LogOut, Shield, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -11,7 +11,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/login");
+    navigate("/");
   };
 
   const navItems = [
@@ -28,7 +28,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top nav bar */}
       <header className="h-16 border-b border-border flex items-center px-4 gap-4 bg-card/50 backdrop-blur-lg sticky top-0 z-50">
-        <Link to="/chat" className="flex items-center gap-2.5 mr-6">
+        <Link to="/" className="flex items-center gap-2.5 mr-6">
           <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center">
             <Bot className="w-4 h-4 text-primary" />
           </div>
@@ -61,15 +61,29 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Shield className="w-3 h-3" /> Admin
             </span>
           )}
-          <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSignOut}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <LogOut className="w-4 h-4" />
-          </Button>
+          {user ? (
+            <>
+              <span className="text-xs text-muted-foreground hidden sm:block">{user.email}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/login")}
+              className="text-muted-foreground hover:text-foreground gap-1.5"
+            >
+              <LogIn className="w-4 h-4" />
+              <span className="hidden sm:inline">Admin Sign In</span>
+            </Button>
+          )}
         </div>
       </header>
 
