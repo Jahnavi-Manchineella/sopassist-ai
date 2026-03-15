@@ -520,6 +520,9 @@ export default function Presentation() {
         <button onClick={toggleFullscreen} className="text-muted-foreground hover:text-foreground transition-colors">
           {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
         </button>
+        <button onClick={() => downloadPptx()} className="text-muted-foreground hover:text-foreground transition-colors" title="Download PPTX">
+          <Download className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Slide dots */}
