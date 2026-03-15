@@ -16,7 +16,6 @@ function badge(slide: PptxGenJS.Slide, text: string, y = 0.4) {
   slide.addText(text.toUpperCase(), {
     x: 0.8, y, w: 3, h: 0.35,
     fontSize: 9, fontFace: "Arial", color: TEAL, bold: true,
-    letterSpacing: 3,
   });
 }
 
