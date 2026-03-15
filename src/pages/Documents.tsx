@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, Trash2, Search, History, RefreshCw } from "lucide-react";
+import { Upload, FileText, Trash2, Search, History, RefreshCw, Image, Mail, Table } from "lucide-react";
 import { toast } from "sonner";
 
 interface Doc {
@@ -19,11 +19,13 @@ interface Doc {
 }
 
 const CATEGORIES = ["Compliance", "SOP", "Products", "General Operations"];
-const ACCEPTED_TYPES = ".txt,.pdf,.docx";
-const ALLOWED_MIME: Record<string, string> = {
-  "text/plain": "txt",
-  "application/pdf": "pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+const ACCEPTED_TYPES = ".txt,.pdf,.docx,.jpg,.jpeg,.png,.webp,.eml,.msg,.csv,.xlsx,.xls";
+const ALLOWED_EXTENSIONS = ["txt", "pdf", "docx", "jpg", "jpeg", "png", "webp", "eml", "msg", "csv", "xlsx", "xls"];
+
+const FILE_TYPE_ICONS: Record<string, typeof FileText> = {
+  image: Image,
+  email: Mail,
+  spreadsheet: Table,
 };
 
 export default function Documents() {
@@ -50,7 +52,6 @@ export default function Documents() {
   }, []);
 
   const loadVersionHistory = async (doc: Doc) => {
-    // Find root document id
     const rootId = doc.parent_document_id || doc.id;
     const { data } = await supabase
       .from("documents")
@@ -65,9 +66,9 @@ export default function Documents() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const fileExt = ALLOWED_MIME[file.type];
-    if (!fileExt) {
-      toast.error("Only .txt, .pdf, and .docx files are supported");
+    const fileExt = file.name.split(".").pop()?.toLowerCase() || "";
+    if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
+      toast.error(`Unsupported file type. Supported: PDF, DOCX, TXT, JPG, PNG, WEBP, EML, MSG, CSV, XLSX, XLS`);
       return;
     }
 
@@ -78,7 +79,6 @@ export default function Documents() {
 
     setUploading(true);
     try {
-      // If replacing, mark old version as not latest and get its version number
       let newVersion = 1;
       let parentId: string | null = null;
       if (replaceDocId) {
@@ -116,7 +116,44 @@ export default function Documents() {
         });
         if (chunks.length > 0) await supabase.from("document_chunks").insert(chunks);
         toast.success(`Uploaded "${file.name}" v${newVersion} with ${chunks.length} chunks`);
+      } else if (fileExt === "csv") {
+        // Process CSV client-side
+        const csvText = await file.text();
+        const content = `CSV Data: ${file.name}\n\n${csvText}`;
+        const insertData: any = {
+          name: file.name,
+          file_type: "spreadsheet",
+          category: selectedCategory,
+          content,
+          version: newVersion,
+          is_latest: true,
+          parent_document_id: parentId,
+        };
+        const { data: doc, error } = await supabase
+          .from("documents")
+          .insert(insertData)
+          .select()
+          .single();
+        if (error) throw error;
+
+        // Chunk CSV by rows (every ~50 rows)
+        const lines = csvText.split("\n").filter(l => l.trim());
+        const header = lines[0] || "";
+        const chunkSize = 50;
+        const chunks = [];
+        for (let i = 1; i < lines.length; i += chunkSize) {
+          const slice = lines.slice(i, i + chunkSize);
+          chunks.push({
+            document_id: doc.id,
+            chunk_index: Math.floor(i / chunkSize),
+            content: `${header}\n${slice.join("\n")}`,
+            section_title: `Rows ${i}-${Math.min(i + chunkSize - 1, lines.length - 1)}`,
+          });
+        }
+        if (chunks.length > 0) await supabase.from("document_chunks").insert(chunks);
+        toast.success(`Uploaded "${file.name}" v${newVersion} with ${chunks.length} chunks`);
       } else {
+        // Send to edge function for AI extraction (PDF, DOCX, images, emails, Excel)
         const formData = new FormData();
         formData.append("file", file);
         formData.append("category", selectedCategory);
@@ -161,10 +198,28 @@ export default function Documents() {
     }
   };
 
+  const getDocIcon = (fileType: string) => {
+    const IconComponent = FILE_TYPE_ICONS[fileType] || FileText;
+    return IconComponent;
+  };
+
+  const getFileTypeLabel = (fileType: string) => {
+    const labels: Record<string, string> = {
+      image: "Image",
+      email: "Email",
+      spreadsheet: "Spreadsheet",
+      pdf: "PDF",
+      docx: "DOCX",
+      txt: "TXT",
+    };
+    return labels[fileType] || fileType.toUpperCase();
+  };
+
   const filtered = documents.filter(
     (d) =>
       d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.category.toLowerCase().includes(search.toLowerCase())
+      d.category.toLowerCase().includes(search.toLowerCase()) ||
+      d.file_type.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -197,12 +252,23 @@ export default function Documents() {
                 <Button asChild disabled={uploading}>
                   <span className="bg-primary hover:bg-primary/80 text-primary-foreground">
                     <Upload className="w-4 h-4 mr-2" />
-                    {uploading ? "Uploading..." : "Upload Document"}
+                    {uploading ? "Processing..." : "Upload Document"}
                   </span>
                 </Button>
               </label>
             </div>
           )}
+        </div>
+
+        {/* Supported formats hint */}
+        <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Supported:</span>
+          <span className="px-1.5 py-0.5 rounded bg-secondary/80">PDF</span>
+          <span className="px-1.5 py-0.5 rounded bg-secondary/80">DOCX</span>
+          <span className="px-1.5 py-0.5 rounded bg-secondary/80">TXT</span>
+          <span className="px-1.5 py-0.5 rounded bg-secondary/80">Images</span>
+          <span className="px-1.5 py-0.5 rounded bg-secondary/80">Emails</span>
+          <span className="px-1.5 py-0.5 rounded bg-secondary/80">CSV/Excel</span>
         </div>
 
         {/* Search */}
@@ -211,89 +277,95 @@ export default function Documents() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search documents..."
+            placeholder="Search documents by name, category, or type..."
             className="pl-10 bg-secondary/50 border-border/50"
           />
         </div>
 
         {/* Documents list */}
         <div className="flex-1 overflow-y-auto space-y-2">
-          {filtered.map((doc) => (
-            <div
-              key={doc.id}
-              onClick={() => setPreviewDoc(doc)}
-              className={`glass-panel rounded-lg p-4 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-colors ${
-                previewDoc?.id === doc.id ? "border-primary/40 bg-primary/5" : ""
-              }`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-accent" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent">
-                      {doc.category}
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-mono">
-                      v{doc.version}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(doc.created_at).toLocaleDateString()}
-                    </span>
+          {filtered.map((doc) => {
+            const DocIcon = getDocIcon(doc.file_type);
+            return (
+              <div
+                key={doc.id}
+                onClick={() => setPreviewDoc(doc)}
+                className={`glass-panel rounded-lg p-4 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-colors ${
+                  previewDoc?.id === doc.id ? "border-primary/40 bg-primary/5" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                    <DocIcon className="w-5 h-5 text-accent" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent">
+                        {doc.category}
+                      </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                        {getFileTypeLabel(doc.file_type)}
+                      </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-mono">
+                        v{doc.version}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(doc.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {isAdmin && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-primary"
-                      title="Version history"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        loadVersionHistory(doc);
-                      }}
-                    >
-                      <History className="w-4 h-4" />
-                    </Button>
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept={ACCEPTED_TYPES}
-                        onChange={(e) => handleFileUpload(e, doc.id)}
-                        className="hidden"
-                        disabled={uploading}
-                      />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {isAdmin && (
+                    <>
                       <Button
-                        asChild
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-accent"
-                        title="Upload new version"
+                        className="text-muted-foreground hover:text-primary"
+                        title="Version history"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          loadVersionHistory(doc);
+                        }}
                       >
-                        <span><RefreshCw className="w-4 h-4" /></span>
+                        <History className="w-4 h-4" />
                       </Button>
-                    </label>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(doc.id);
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept={ACCEPTED_TYPES}
+                          onChange={(e) => handleFileUpload(e, doc.id)}
+                          className="hidden"
+                          disabled={uploading}
+                        />
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-accent"
+                          title="Upload new version"
+                        >
+                          <span><RefreshCw className="w-4 h-4" /></span>
+                        </Button>
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(doc.id);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <div className="text-center py-12 text-muted-foreground text-sm">
               {search ? "No documents match your search" : "No documents uploaded yet"}
@@ -349,6 +421,7 @@ export default function Documents() {
             <h3 className="text-sm font-medium text-foreground">{previewDoc.name}</h3>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-accent">{previewDoc.category}</span>
+              <span className="text-xs text-muted-foreground">{getFileTypeLabel(previewDoc.file_type)}</span>
               <span className="text-xs font-mono text-primary">v{previewDoc.version}</span>
             </div>
           </div>
