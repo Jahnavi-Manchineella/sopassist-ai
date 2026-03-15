@@ -95,7 +95,7 @@ export default function Landing() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/chat")}
               size="lg"
               className="bg-primary text-primary-foreground hover:bg-primary/85 px-8 py-6 text-base glow-primary"
             >
