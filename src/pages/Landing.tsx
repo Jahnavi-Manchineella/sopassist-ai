@@ -232,7 +232,7 @@ export default function Landing() {
             Start finding answers faster with AI-powered knowledge retrieval built for banking teams.
           </p>
           <Button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/chat")}
             size="lg"
             className="bg-primary text-primary-foreground hover:bg-primary/85 px-10 py-6 text-base"
           >
