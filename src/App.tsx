@@ -48,6 +48,7 @@ const App = () => (
             <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
             <Route path="/documents" element={<AdminRoute><Documents /></AdminRoute>} />
             <Route path="/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
+            <Route path="/presentation" element={<Presentation />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
