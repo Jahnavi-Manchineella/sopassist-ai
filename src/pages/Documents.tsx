@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, Trash2, Search, History, RefreshCw, Image, Mail, Table } from "lucide-react";
+import { Upload, FileText, Trash2, Search, History, RefreshCw, Image, Mail, Table, Link, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Doc {
@@ -37,6 +37,9 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<Doc | null>(null);
   const [showVersions, setShowVersions] = useState(false);
   const [versionHistory, setVersionHistory] = useState<Doc[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [sharepointUrl, setSharepointUrl] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
 
   const loadDocs = async () => {
     const { data } = await supabase
@@ -187,6 +190,39 @@ export default function Documents() {
     }
   };
 
+  const handleSharepointUrl = async () => {
+    if (!sharepointUrl.trim()) return;
+    setUrlLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/parse-sharepoint-url`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: sharepointUrl.trim(),
+            category: selectedCategory,
+          }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to parse SharePoint URL");
+      toast.success(`Imported "${result.name}" with ${result.chunks} chunks`);
+      setSharepointUrl("");
+      setShowUrlInput(false);
+      loadDocs();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to import from SharePoint");
+    } finally {
+      setUrlLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("documents").delete().eq("id", id);
     if (error) {
@@ -256,12 +292,41 @@ export default function Documents() {
                   </span>
                 </Button>
               </label>
+              <Button
+                variant="outline"
+                onClick={() => setShowUrlInput(!showUrlInput)}
+                className="border-border text-foreground"
+              >
+                <Link className="w-4 h-4 mr-2" />
+                SharePoint URL
+              </Button>
             </div>
           )}
         </div>
 
+        {/* SharePoint URL input */}
+        {showUrlInput && isAdmin && (
+          <div className="mb-4 flex items-center gap-2">
+            <Input
+              value={sharepointUrl}
+              onChange={(e) => setSharepointUrl(e.target.value)}
+              placeholder="Paste SharePoint / OneDrive URL here..."
+              className="flex-1 bg-secondary/50 border-border/50"
+              onKeyDown={(e) => e.key === "Enter" && handleSharepointUrl()}
+            />
+            <Button
+              onClick={handleSharepointUrl}
+              disabled={urlLoading || !sharepointUrl.trim()}
+              className="bg-primary hover:bg-primary/80 text-primary-foreground"
+            >
+              {urlLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+              {urlLoading ? "Importing..." : "Import"}
+            </Button>
+          </div>
+        )}
+
         {/* Supported formats hint */}
-        <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span>Supported:</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">PDF</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">DOCX</span>
@@ -269,6 +334,7 @@ export default function Documents() {
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">Images</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">Emails</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">CSV/Excel</span>
+          <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary">SharePoint URLs</span>
         </div>
 
         {/* Search */}
