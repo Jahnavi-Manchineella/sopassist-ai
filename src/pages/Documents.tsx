@@ -37,6 +37,9 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<Doc | null>(null);
   const [showVersions, setShowVersions] = useState(false);
   const [versionHistory, setVersionHistory] = useState<Doc[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [sharepointUrl, setSharepointUrl] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
 
   const loadDocs = async () => {
     const { data } = await supabase
