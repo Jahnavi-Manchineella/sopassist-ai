@@ -42,25 +42,25 @@ serve(async (req) => {
       throw new Error("A valid URL is required");
     }
 
-    // Validate it looks like a SharePoint or OneDrive URL
-    const parsedUrl = new URL(url);
-    const hostname = parsedUrl.hostname.toLowerCase();
-    const isSharePoint = hostname.includes("sharepoint.com") || 
-                         hostname.includes("sharepoint-df.com") ||
-                         hostname.includes("onedrive.com") ||
-                         hostname.includes("1drv.ms") ||
-                         hostname.includes("office.com") ||
-                         hostname.includes("microsoft.com");
+    // Validate it's a valid URL
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      throw new Error("Invalid URL format");
+    }
 
-    if (!isSharePoint) {
-      throw new Error("URL must be a SharePoint, OneDrive, or Microsoft 365 link");
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      throw new Error("URL must use http or https");
     }
 
     // Transform SharePoint sharing URLs to direct download URLs
     let downloadUrl = url;
     
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const isSharePoint = hostname.includes("sharepoint.com") || hostname.includes("onedrive.com");
+    
     // Handle :x:/r/ or :x:/s/ style sharing links  
-    // e.g. https://xxx.sharepoint.com/:w:/s/site/ENCODED_ID
     const sharingMatch = url.match(/sharepoint\.com\/:([a-z]):\//);
     if (sharingMatch) {
       // Convert sharing link to download by appending download=1
