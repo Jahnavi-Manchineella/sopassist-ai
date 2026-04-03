@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, Trash2, Search, History, RefreshCw, Image, Mail, Table } from "lucide-react";
+import { Upload, FileText, Trash2, Search, History, RefreshCw, Image, Mail, Table, Link, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Doc {
