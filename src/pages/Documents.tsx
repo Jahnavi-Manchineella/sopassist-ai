@@ -190,6 +190,39 @@ export default function Documents() {
     }
   };
 
+  const handleSharepointUrl = async () => {
+    if (!sharepointUrl.trim()) return;
+    setUrlLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/parse-sharepoint-url`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: sharepointUrl.trim(),
+            category: selectedCategory,
+          }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to parse SharePoint URL");
+      toast.success(`Imported "${result.name}" with ${result.chunks} chunks`);
+      setSharepointUrl("");
+      setShowUrlInput(false);
+      loadDocs();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to import from SharePoint");
+    } finally {
+      setUrlLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("documents").delete().eq("id", id);
     if (error) {
