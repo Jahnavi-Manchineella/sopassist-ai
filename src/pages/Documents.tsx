@@ -292,12 +292,41 @@ export default function Documents() {
                   </span>
                 </Button>
               </label>
+              <Button
+                variant="outline"
+                onClick={() => setShowUrlInput(!showUrlInput)}
+                className="border-border text-foreground"
+              >
+                <Link className="w-4 h-4 mr-2" />
+                SharePoint URL
+              </Button>
             </div>
           )}
         </div>
 
+        {/* SharePoint URL input */}
+        {showUrlInput && isAdmin && (
+          <div className="mb-4 flex items-center gap-2">
+            <Input
+              value={sharepointUrl}
+              onChange={(e) => setSharepointUrl(e.target.value)}
+              placeholder="Paste SharePoint / OneDrive URL here..."
+              className="flex-1 bg-secondary/50 border-border/50"
+              onKeyDown={(e) => e.key === "Enter" && handleSharepointUrl()}
+            />
+            <Button
+              onClick={handleSharepointUrl}
+              disabled={urlLoading || !sharepointUrl.trim()}
+              className="bg-primary hover:bg-primary/80 text-primary-foreground"
+            >
+              {urlLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+              {urlLoading ? "Importing..." : "Import"}
+            </Button>
+          </div>
+        )}
+
         {/* Supported formats hint */}
-        <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span>Supported:</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">PDF</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">DOCX</span>
@@ -305,6 +334,7 @@ export default function Documents() {
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">Images</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">Emails</span>
           <span className="px-1.5 py-0.5 rounded bg-secondary/80">CSV/Excel</span>
+          <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary">SharePoint URLs</span>
         </div>
 
         {/* Search */}
