@@ -57,8 +57,10 @@ serve(async (req) => {
     // Transform SharePoint sharing URLs to direct download URLs
     let downloadUrl = url;
     
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const isSharePoint = hostname.includes("sharepoint.com") || hostname.includes("onedrive.com");
+    
     // Handle :x:/r/ or :x:/s/ style sharing links  
-    // e.g. https://xxx.sharepoint.com/:w:/s/site/ENCODED_ID
     const sharingMatch = url.match(/sharepoint\.com\/:([a-z]):\//);
     if (sharingMatch) {
       // Convert sharing link to download by appending download=1
