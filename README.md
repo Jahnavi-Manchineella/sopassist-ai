@@ -10,7 +10,7 @@ The system improves operational efficiency, reduces dependency on subject matter
 # 🚀 Live Demo
 
 
-https://sopassist-ai.lovable.app
+https://sopassist-ai.vercel.app/
 
 ---
 
