@@ -7,6 +7,46 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Generate embeddings via HuggingFace Inference API (sentence-transformers/all-MiniLM-L6-v2, 384-dim)
+async function embedTexts(texts: string[]): Promise<(number[] | null)[]> {
+  const HF_KEY = Deno.env.get("HUGGINGFACE_API_KEY");
+  if (!HF_KEY) {
+    console.warn("HUGGINGFACE_API_KEY not set, skipping embeddings");
+    return texts.map(() => null);
+  }
+  const results: (number[] | null)[] = [];
+  // HF feature-extraction supports batching; chunk to avoid huge payloads
+  const BATCH = 32;
+  for (let i = 0; i < texts.length; i += BATCH) {
+    const batch = texts.slice(i, i + BATCH);
+    try {
+      const res = await fetch(
+        "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${HF_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ inputs: batch, options: { wait_for_model: true } }),
+        }
+      );
+      if (!res.ok) {
+        console.error("HF embed error:", res.status, await res.text());
+        for (const _ of batch) results.push(null);
+        continue;
+      }
+      const data = await res.json();
+      // data is number[][] (one vector per input)
+      for (const v of data) results.push(Array.isArray(v) ? v : null);
+    } catch (e) {
+      console.error("HF embed exception:", e);
+      for (const _ of batch) results.push(null);
+    }
+  }
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -184,7 +224,13 @@ serve(async (req) => {
     });
 
     if (chunks.length > 0) {
-      const { error: chunkErr } = await supabase.from("document_chunks").insert(chunks);
+      // Generate embeddings for each chunk via HuggingFace
+      const embeddings = await embedTexts(chunks.map((c) => c.content));
+      const chunksWithEmb = chunks.map((c, i) => ({
+        ...c,
+        embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+      }));
+      const { error: chunkErr } = await supabase.from("document_chunks").insert(chunksWithEmb);
       if (chunkErr) console.error("Chunk insert error:", chunkErr);
     }
 

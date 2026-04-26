@@ -73,6 +73,7 @@ export type Database = {
           chunk_index: number
           content: string
           document_id: string
+          embedding: string | null
           fts: unknown
           id: string
           section_title: string | null
@@ -81,6 +82,7 @@ export type Database = {
           chunk_index: number
           content: string
           document_id: string
+          embedding?: string | null
           fts?: unknown
           id?: string
           section_title?: string | null
@@ -89,6 +91,7 @@ export type Database = {
           chunk_index?: number
           content?: string
           document_id?: string
+          embedding?: string | null
           fts?: unknown
           id?: string
           section_title?: string | null
@@ -241,6 +244,23 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      match_chunks: {
+        Args: {
+          category_filter?: string
+          match_limit?: number
+          query_embedding: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          chunk_content: string
+          chunk_document_id: string
+          chunk_id: string
+          chunk_section_title: string
+          doc_category: string
+          doc_name: string
+          similarity: number
+        }[]
       }
       search_chunks: {
         Args: {

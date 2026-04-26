@@ -8,6 +8,34 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Citations, X-Category",
 };
 
+// Embed a single query via HuggingFace (sentence-transformers/all-MiniLM-L6-v2)
+async function embedQuery(text: string): Promise<number[] | null> {
+  const HF_KEY = Deno.env.get("HUGGINGFACE_API_KEY");
+  if (!HF_KEY) return null;
+  try {
+    const res = await fetch(
+      "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ inputs: text, options: { wait_for_model: true } }),
+      }
+    );
+    if (!res.ok) {
+      console.error("HF embed query error:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return Array.isArray(data) ? (data as number[]) : null;
+  } catch (e) {
+    console.error("HF embed query exception:", e);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -33,20 +61,33 @@ serve(async (req) => {
 
     const lastUserMessage = messages[messages.length - 1]?.content || "";
 
-    // Use full-text search via the search_chunks function
     let relevantChunks: any[] = [];
     const categoryFilter = userCategory && userCategory !== "All" ? userCategory : null;
 
-    const { data: chunks, error: searchError } = await supabase.rpc("search_chunks", {
-      query_text: lastUserMessage,
-      category_filter: categoryFilter,
-      match_limit: 5,
-    });
-
-    if (searchError) {
-      console.error("search_chunks error:", searchError);
+    // 1. SEMANTIC SEARCH: embed the query and find similar chunks via cosine similarity
+    const queryEmbedding = await embedQuery(lastUserMessage);
+    if (queryEmbedding) {
+      const { data: semChunks, error: semErr } = await supabase.rpc("match_chunks", {
+        query_embedding: JSON.stringify(queryEmbedding),
+        category_filter: categoryFilter,
+        match_limit: 5,
+        similarity_threshold: 0.3,
+      });
+      if (semErr) console.error("match_chunks error:", semErr);
+      relevantChunks = semChunks || [];
+      console.log(`Semantic search: ${relevantChunks.length} chunks`);
     }
-    relevantChunks = chunks || [];
+
+    // 2. FTS FALLBACK: if no semantic results (e.g. embeddings missing), use full-text search
+    if (relevantChunks.length === 0) {
+      const { data: chunks, error: searchError } = await supabase.rpc("search_chunks", {
+        query_text: lastUserMessage,
+        category_filter: categoryFilter,
+        match_limit: 5,
+      });
+      if (searchError) console.error("search_chunks error:", searchError);
+      relevantChunks = chunks || [];
+    }
 
     // If full-text search returns nothing, fall back to keyword ilike
     if (relevantChunks.length === 0) {
