@@ -15,7 +15,7 @@ async function embedTexts(texts: string[]): Promise<(number[] | null)[]> {
   for (let i = 0; i < texts.length; i += BATCH) {
     const batch = texts.slice(i, i + BATCH);
     const res = await fetch(
-      "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+      "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2",
       {
         method: "POST",
         headers: { Authorization: `Bearer ${HF_KEY}`, "Content-Type": "application/json" },
