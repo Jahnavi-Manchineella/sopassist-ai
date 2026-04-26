@@ -60,8 +60,10 @@ export async function streamChat({
     const categoryHeader = resp.headers.get("X-Category");
     if (citationsHeader) {
       try {
-        const citations = JSON.parse(citationsHeader);
-        onCitations(citations, categoryHeader || "General Operations");
+        const decoded = decodeURIComponent(escape(atob(citationsHeader)));
+        const citations = JSON.parse(decoded);
+        const cat = categoryHeader ? decodeURIComponent(categoryHeader) : "General Operations";
+        onCitations(citations, cat);
       } catch {}
     }
 
