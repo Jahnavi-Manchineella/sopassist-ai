@@ -14,7 +14,7 @@ async function embedQuery(text: string): Promise<number[] | null> {
   if (!HF_KEY) return null;
   try {
     const res = await fetch(
-      "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+      "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2",
       {
         method: "POST",
         headers: {
@@ -29,7 +29,18 @@ async function embedQuery(text: string): Promise<number[] | null> {
       return null;
     }
     const data = await res.json();
-    return Array.isArray(data) ? (data as number[]) : null;
+    // Model returns either number[] (sentence embedding) or number[][] (token embeddings)
+    if (Array.isArray(data) && typeof data[0] === "number") return data as number[];
+    if (Array.isArray(data) && Array.isArray(data[0])) {
+      // Mean-pool token embeddings
+      const tokens = data as number[][];
+      const dim = tokens[0].length;
+      const pooled = new Array(dim).fill(0);
+      for (const t of tokens) for (let i = 0; i < dim; i++) pooled[i] += t[i];
+      for (let i = 0; i < dim; i++) pooled[i] /= tokens.length;
+      return pooled;
+    }
+    return null;
   } catch (e) {
     console.error("HF embed query exception:", e);
     return null;
@@ -207,8 +218,10 @@ Guidelines:
     // Return stream with citation headers
     const headers = new Headers(corsHeaders);
     headers.set("Content-Type", "text/event-stream");
-    headers.set("X-Citations", JSON.stringify(citations));
-    headers.set("X-Category", category);
+    // Base64-encode to ensure ByteString-safe header values (citations may contain non-ASCII)
+    const citationsB64 = btoa(unescape(encodeURIComponent(JSON.stringify(citations))));
+    headers.set("X-Citations", citationsB64);
+    headers.set("X-Category", encodeURIComponent(category));
 
     return new Response(aiResponse.body, { headers });
   } catch (e: any) {
