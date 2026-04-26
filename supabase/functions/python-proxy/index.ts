@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = error instanceof DOMException && error.name === "AbortError"
       ? "Request to Python API timed out"
-      : `Proxy error: ${error.message}`;
+      : `Proxy error: ${error instanceof Error ? error.message : String(error)}`;
 
     return new Response(JSON.stringify({ error: message }), {
       status: 502,
