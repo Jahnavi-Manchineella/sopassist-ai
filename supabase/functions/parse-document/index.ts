@@ -224,7 +224,13 @@ serve(async (req) => {
     });
 
     if (chunks.length > 0) {
-      const { error: chunkErr } = await supabase.from("document_chunks").insert(chunks);
+      // Generate embeddings for each chunk via HuggingFace
+      const embeddings = await embedTexts(chunks.map((c) => c.content));
+      const chunksWithEmb = chunks.map((c, i) => ({
+        ...c,
+        embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+      }));
+      const { error: chunkErr } = await supabase.from("document_chunks").insert(chunksWithEmb);
       if (chunkErr) console.error("Chunk insert error:", chunkErr);
     }
 
