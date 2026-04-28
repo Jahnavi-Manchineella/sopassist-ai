@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { streamChat, ChatMessage, Citation } from "@/lib/chat-stream";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { RaiseTicketDialog } from "@/components/chat/RaiseTicketDialog";
 import { Bot, Plus, MessageSquare, FileText, X, ChevronRight, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -35,6 +36,8 @@ export default function Chat() {
   const [showSidebar, setShowSidebar] = useState(isAuthenticated);
   const [selectedDomain, setSelectedDomain] = useState("All");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [ticketOpen, setTicketOpen] = useState(false);
+  const [ticketContext, setTicketContext] = useState<{ query: string; response: string; category: string } | null>(null);
 
   // Load conversations (only for authenticated users)
   useEffect(() => {
@@ -305,12 +308,32 @@ export default function Chat() {
             </div>
           )}
           {messages.map((msg, i) => (
-            <ChatBubble
-              key={i}
-              role={msg.role}
-              content={msg.content}
-              isStreaming={isStreaming && i === messages.length - 1 && msg.role === "assistant"}
-            />
+            (() => {
+              const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+              const streaming = isStreaming && isLastAssistant;
+              const hasNoCitations = msg.role === "assistant" && (!msg.citations || msg.citations.length === 0);
+              const isFallback = hasNoCitations && !streaming;
+              const showRaise = isAuthenticated && msg.role === "assistant" && !streaming;
+              const prevUserMsg = i > 0 ? messages[i - 1] : null;
+              return (
+                <ChatBubble
+                  key={i}
+                  role={msg.role}
+                  content={msg.content}
+                  isStreaming={streaming}
+                  showRaiseTicket={showRaise}
+                  isFallback={isFallback}
+                  onRaiseTicket={() => {
+                    setTicketContext({
+                      query: prevUserMsg?.content || "",
+                      response: msg.content,
+                      category: msg.category || selectedDomain !== "All" ? selectedDomain : "General Operations",
+                    });
+                    setTicketOpen(true);
+                  }}
+                />
+              );
+            })()
           ))}
         </div>
 
@@ -350,6 +373,17 @@ export default function Chat() {
             ))}
           </div>
         </div>
+      )}
+
+      {ticketContext && (
+        <RaiseTicketDialog
+          open={ticketOpen}
+          onOpenChange={setTicketOpen}
+          query={ticketContext.query}
+          category={ticketContext.category}
+          assistantResponse={ticketContext.response}
+          conversationId={activeConversationId}
+        />
       )}
     </div>
   );
