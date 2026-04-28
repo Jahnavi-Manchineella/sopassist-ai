@@ -215,6 +215,107 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_status: Database["public"]["Enums"]["ticket_status"] | null
+          id: string
+          note: string | null
+          ticket_id: string
+          to_status: Database["public"]["Enums"]["ticket_status"]
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["ticket_status"] | null
+          id?: string
+          note?: string | null
+          ticket_id: string
+          to_status: Database["public"]["Enums"]["ticket_status"]
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["ticket_status"] | null
+          id?: string
+          note?: string | null
+          ticket_id?: string
+          to_status?: Database["public"]["Enums"]["ticket_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_status_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tickets: {
+        Row: {
+          assigned_at: string | null
+          assigned_to: string | null
+          assigned_to_email: string | null
+          audit_log_id: string | null
+          category: string
+          closed_at: string | null
+          context: string | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          priority: Database["public"]["Enums"]["ticket_priority"]
+          query: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["ticket_status"]
+          updated_at: string
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_to?: string | null
+          assigned_to_email?: string | null
+          audit_log_id?: string | null
+          category?: string
+          closed_at?: string | null
+          context?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          query: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["ticket_status"]
+          updated_at?: string
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_to?: string | null
+          assigned_to_email?: string | null
+          audit_log_id?: string | null
+          category?: string
+          closed_at?: string | null
+          context?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          query?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["ticket_status"]
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -281,6 +382,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user" | "sme"
+      ticket_priority: "low" | "medium" | "high" | "urgent"
+      ticket_status: "open" | "assigned" | "in_progress" | "resolved" | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -409,6 +512,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user", "sme"],
+      ticket_priority: ["low", "medium", "high", "urgent"],
+      ticket_status: ["open", "assigned", "in_progress", "resolved", "closed"],
     },
   },
 } as const
