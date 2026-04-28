@@ -1,11 +1,11 @@
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bot, MessageSquare, FileText, BarChart3, LogOut, Shield, LogIn } from "lucide-react";
+import { Bot, MessageSquare, FileText, BarChart3, LogOut, Shield, LogIn, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, isSme, isStaff, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -16,6 +16,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const navItems = [
     { to: "/chat", icon: MessageSquare, label: "Chat" },
+    ...(user ? [{ to: "/tickets", icon: Ticket, label: isStaff ? "Tickets" : "My Tickets" }] : []),
     ...(isAdmin
       ? [
           { to: "/documents", icon: FileText, label: "Documents" },
