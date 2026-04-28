@@ -1,13 +1,16 @@
 import ReactMarkdown from "react-markdown";
-import { Bot, User } from "lucide-react";
+import { Bot, User, LifeBuoy } from "lucide-react";
 
 interface ChatBubbleProps {
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
+  showRaiseTicket?: boolean;
+  onRaiseTicket?: () => void;
+  isFallback?: boolean;
 }
 
-export function ChatBubble({ role, content, isStreaming }: ChatBubbleProps) {
+export function ChatBubble({ role, content, isStreaming, showRaiseTicket, onRaiseTicket, isFallback }: ChatBubbleProps) {
   const isUser = role === "user";
 
   return (
@@ -31,6 +34,20 @@ export function ChatBubble({ role, content, isStreaming }: ChatBubbleProps) {
         </div>
         {isStreaming && (
           <span className="inline-block w-2 h-4 bg-primary animate-pulse-glow ml-1" />
+        )}
+        {showRaiseTicket && !isStreaming && (
+          <div className={`mt-3 pt-3 border-t border-border/50 flex items-center justify-between gap-2 ${isFallback ? "" : ""}`}>
+            <span className="text-xs text-muted-foreground">
+              {isFallback ? "Need a human to look at this?" : "Not what you needed?"}
+            </span>
+            <button
+              onClick={onRaiseTicket}
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-accent/15 text-accent hover:bg-accent/25 border border-accent/30 transition-colors"
+            >
+              <LifeBuoy className="w-3 h-3" />
+              Raise Ticket
+            </button>
+          </div>
         )}
       </div>
     </div>
