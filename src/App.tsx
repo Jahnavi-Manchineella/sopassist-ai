@@ -12,6 +12,7 @@ import Documents from "./pages/Documents";
 import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 import Presentation from "./pages/Presentation";
+import Tickets from "./pages/Tickets";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,19 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user || !isAdmin) return <Navigate to="/login" replace />;
+  return <AppLayout>{children}</AppLayout>;
+}
+
+function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
 
@@ -46,6 +60,7 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
             <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
+            <Route path="/tickets" element={<AuthenticatedRoute><Tickets /></AuthenticatedRoute>} />
             <Route path="/documents" element={<AdminRoute><Documents /></AdminRoute>} />
             <Route path="/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
             <Route path="/presentation" element={<Presentation />} />
