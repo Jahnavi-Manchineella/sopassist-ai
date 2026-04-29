@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Ticket, RefreshCw, Clock, User as UserIcon, Tag, AlertCircle } from "lucide-react";
+import { TicketQAPanel } from "@/components/tickets/TicketQAPanel";
 
 type TicketStatus = "open" | "assigned" | "in_progress" | "resolved" | "closed";
 
@@ -244,6 +245,7 @@ export default function Tickets() {
         onUpdated={loadTickets}
         canManage={isStaff}
         staff={staff}
+        currentUserId={user?.id || null}
       />
     </div>
   );
@@ -255,12 +257,14 @@ function TicketDetailDialog({
   onUpdated,
   canManage,
   staff,
+  currentUserId,
 }: {
   ticket: TicketRow | null;
   onClose: () => void;
   onUpdated: () => void;
   canManage: boolean;
   staff: Array<{ user_id: string; email: string }>;
+  currentUserId: string | null;
 }) {
   const [status, setStatus] = useState<TicketStatus>("open");
   const [assignee, setAssignee] = useState<string>("");
@@ -386,6 +390,13 @@ function TicketDetailDialog({
               <span className="text-emerald-300">This ticket has been resolved.</span>
             </div>
           )}
+
+          <TicketQAPanel
+            ticketId={ticket.id}
+            ticketStatus={ticket.status}
+            isRequester={!!currentUserId && currentUserId === ticket.user_id}
+            onChanged={onUpdated}
+          />
         </div>
 
         <DialogFooter>
