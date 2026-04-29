@@ -313,7 +313,8 @@ export default function Chat() {
               const streaming = isStreaming && isLastAssistant;
               const hasNoCitations = msg.role === "assistant" && (!msg.citations || msg.citations.length === 0);
               const isFallback = hasNoCitations && !streaming;
-              const showRaise = isAuthenticated && msg.role === "assistant" && !streaming;
+              // Show "Raise Ticket" on every assistant reply (guests get prompted to sign in on click)
+              const showRaise = msg.role === "assistant" && !streaming;
               const prevUserMsg = i > 0 ? messages[i - 1] : null;
               return (
                 <ChatBubble
