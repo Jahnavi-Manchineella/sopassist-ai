@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LifeBuoy } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface RaiseTicketDialogProps {
   open: boolean;
@@ -43,6 +44,7 @@ export function RaiseTicketDialog({
   assistantResponse,
 }: RaiseTicketDialogProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [editedQuery, setEditedQuery] = useState(query);
   const [selectedCategory, setSelectedCategory] = useState(category);
   const [priority, setPriority] = useState<(typeof PRIORITIES)[number]>("medium");
@@ -58,6 +60,8 @@ export function RaiseTicketDialog({
   const handleSubmit = async () => {
     if (!user) {
       toast.error("Please sign in to raise a ticket");
+      onOpenChange(false);
+      navigate("/login");
       return;
     }
     if (!editedQuery.trim()) {
