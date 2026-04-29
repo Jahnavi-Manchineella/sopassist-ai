@@ -13,6 +13,7 @@ import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 import Presentation from "./pages/Presentation";
 import Tickets from "./pages/Tickets";
+import Members from "./pages/Members";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
             <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
             <Route path="/tickets" element={<AuthenticatedRoute><Tickets /></AuthenticatedRoute>} />
+            <Route path="/members" element={<AdminRoute><Members /></AdminRoute>} />
             <Route path="/documents" element={<AdminRoute><Documents /></AdminRoute>} />
             <Route path="/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
             <Route path="/presentation" element={<Presentation />} />

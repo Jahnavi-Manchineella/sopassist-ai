@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bot, MessageSquare, FileText, BarChart3, LogOut, Shield, LogIn, Ticket } from "lucide-react";
+import { Bot, MessageSquare, FileText, BarChart3, LogOut, Shield, LogIn, Ticket, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -21,6 +21,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       ? [
           { to: "/documents", icon: FileText, label: "Documents" },
           { to: "/analytics", icon: BarChart3, label: "Analytics" },
+          { to: "/members", icon: UserCog, label: "Members" },
         ]
       : []),
   ];
