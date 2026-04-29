@@ -215,6 +215,50 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_qa: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          qa_type: string
+          rating: number | null
+          reviewer_email: string | null
+          reviewer_id: string
+          ticket_id: string
+          verdict: string | null
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          qa_type: string
+          rating?: number | null
+          reviewer_email?: string | null
+          reviewer_id: string
+          ticket_id: string
+          verdict?: string | null
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          qa_type?: string
+          rating?: number | null
+          reviewer_email?: string | null
+          reviewer_id?: string
+          ticket_id?: string
+          verdict?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_qa_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_status_history: {
         Row: {
           changed_by: string | null
