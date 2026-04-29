@@ -3,8 +3,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserCog, Search, RefreshCw } from "lucide-react";
+import { Shield, UserCog, Search, RefreshCw, UserPlus } from "lucide-react";
 
 type AppRole = "admin" | "sme" | "user";
 
@@ -19,6 +36,10 @@ export default function Members() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addRole, setAddRole] = useState<AppRole>("admin");
+  const [adding, setAdding] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -81,6 +102,55 @@ export default function Members() {
     user: "bg-muted text-muted-foreground border-border",
   };
 
+  const handleAddMember = async () => {
+    const term = addName.trim();
+    if (!term) {
+      toast.error("Enter a name or user id");
+      return;
+    }
+    setAdding(true);
+    // Try exact user_id match first, then partial name match
+    let target: MemberRow | undefined = members.find(
+      (m) => m.user_id === term
+    );
+    if (!target) {
+      const matches = members.filter((m) =>
+        (m.full_name || "").toLowerCase().includes(term.toLowerCase())
+      );
+      if (matches.length === 0) {
+        toast.error("No matching user found. They must sign in at least once.");
+        setAdding(false);
+        return;
+      }
+      if (matches.length > 1) {
+        toast.error(`Multiple matches (${matches.length}). Refine your search.`);
+        setAdding(false);
+        return;
+      }
+      target = matches[0];
+    }
+    if (target.roles.includes(addRole)) {
+      toast.info(`${target.full_name || "User"} is already a ${addRole}`);
+      setAdding(false);
+      return;
+    }
+    const { error } = await supabase
+      .from("user_roles")
+      .insert({ user_id: target.user_id, role: addRole as any });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(
+        `Granted ${addRole} to ${target.full_name || target.user_id.slice(0, 8)}`
+      );
+      setAddOpen(false);
+      setAddName("");
+      setAddRole("admin");
+      load();
+    }
+    setAdding(false);
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -93,10 +163,69 @@ export default function Members() {
             Grant or revoke admin and SME roles. Only admins can manage members.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <UserPlus className="w-4 h-4 mr-2" />
+                Add Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add member role</DialogTitle>
+                <DialogDescription>
+                  Grant admin or SME role to an existing user. The user must
+                  have signed in at least once.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="member-search">User name or ID</Label>
+                  <Input
+                    id="member-search"
+                    placeholder="e.g. Jane Doe or user uuid"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select
+                    value={addRole}
+                    onValueChange={(v) => setAddRole(v as AppRole)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="sme">SME</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setAddOpen(false)}
+                  disabled={adding}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleAddMember} disabled={adding}>
+                  {adding ? "Adding…" : "Grant role"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="relative mb-4">
