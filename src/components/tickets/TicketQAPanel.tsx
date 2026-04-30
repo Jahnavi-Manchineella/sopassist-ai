@@ -75,7 +75,7 @@ export function TicketQAPanel({
       return;
     }
     setSubmittingRating(true);
-    const { data: inserted, error } = await supabase.from("ticket_qa" as any).insert({
+    const insertRating = await (supabase.from("ticket_qa" as any) as any).insert({
       ticket_id: ticketId,
       qa_type: "requester_rating",
       reviewer_id: user!.id,
@@ -83,6 +83,8 @@ export function TicketQAPanel({
       rating,
       comment: ratingComment || null,
     }).select("id").single();
+    const inserted = insertRating.data as { id: string } | null;
+    const error = insertRating.error;
     setSubmittingRating(false);
     if (error) {
       toast.error(error.message);
@@ -104,7 +106,7 @@ export function TicketQAPanel({
 
   const submitReview = async () => {
     setSubmittingReview(true);
-    const { data: inserted, error } = await supabase.from("ticket_qa" as any).insert({
+    const insertReview = await (supabase.from("ticket_qa" as any) as any).insert({
       ticket_id: ticketId,
       qa_type: "admin_review",
       reviewer_id: user!.id,
@@ -112,6 +114,8 @@ export function TicketQAPanel({
       verdict,
       comment: reviewNotes || null,
     }).select("id").single();
+    const inserted = insertReview.data as { id: string } | null;
+    const error = insertReview.error;
     setSubmittingReview(false);
     if (error) {
       toast.error(error.message);
