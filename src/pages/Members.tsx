@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserCog, Search, RefreshCw, UserPlus } from "lucide-react";
+import { Shield, UserCog, Search, RefreshCw, UserPlus, Mail } from "lucide-react";
 
 type AppRole = "admin" | "sme" | "user";
 
@@ -40,6 +40,13 @@ export default function Members() {
   const [addName, setAddName] = useState("");
   const [addRole, setAddRole] = useState<AppRole>("admin");
   const [adding, setAdding] = useState(false);
+
+  // Invite-by-email state
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteRole, setInviteRole] = useState<AppRole>("admin");
+  const [inviting, setInviting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -151,6 +158,33 @@ export default function Members() {
     setAdding(false);
   };
 
+  const handleInviteByEmail = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    setInviting(true);
+    const { data, error } = await supabase.functions.invoke("invite-user", {
+      body: {
+        email,
+        full_name: inviteName.trim() || undefined,
+        role: inviteRole,
+      },
+    });
+    setInviting(false);
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || error?.message || "Failed to invite user");
+      return;
+    }
+    toast.success(`Invitation sent to ${email}`);
+    setInviteOpen(false);
+    setInviteEmail("");
+    setInviteName("");
+    setInviteRole("admin");
+    load();
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -164,11 +198,77 @@ export default function Members() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="default">
+                <Mail className="w-4 h-4 mr-2" />
+                Invite by Email
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite a new member</DialogTitle>
+                <DialogDescription>
+                  An invitation email will be sent with a secure link to set their
+                  password. The selected role is granted on account activation.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="invite-email">Email address</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    placeholder="person@bank.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-name">Full name (optional)</Label>
+                  <Input
+                    id="invite-name"
+                    placeholder="Jane Doe"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select
+                    value={inviteRole}
+                    onValueChange={(v) => setInviteRole(v as AppRole)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="sme">SME</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setInviteOpen(false)}
+                  disabled={inviting}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleInviteByEmail} disabled={inviting}>
+                  {inviting ? "Sending…" : "Send invite"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">
+              <Button size="sm" variant="outline">
                 <UserPlus className="w-4 h-4 mr-2" />
-                Add Member
+                Grant Existing User
               </Button>
             </DialogTrigger>
             <DialogContent>

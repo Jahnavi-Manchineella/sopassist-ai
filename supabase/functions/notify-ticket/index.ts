@@ -1,5 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  ticketCreatedEmail,
+  ticketAssignedEmail,
+  ticketResolvedEmail,
+  ticketUpdatedEmail,
+  qaSubmittedEmail,
+} from "../_shared/email-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,70 +14,27 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-type Event = "created" | "assigned" | "resolved" | "updated";
+type Event = "created" | "assigned" | "resolved" | "updated" | "qa_submitted";
 
 interface Body {
   event: Event;
   ticket_id: string;
+  qa_id?: string;
 }
 
-const APP_URL = "https://sopassist-ai.lovable.app";
-
-function subjectFor(event: Event, id: string) {
-  const short = id.slice(0, 8);
-  switch (event) {
-    case "created":  return `[SOPAssist] New ticket #${short}`;
-    case "assigned": return `[SOPAssist] Ticket #${short} assigned to you`;
-    case "resolved": return `[SOPAssist] Your ticket #${short} has been resolved`;
-    default:         return `[SOPAssist] Ticket #${short} updated`;
-  }
-}
-
-function htmlBody(event: Event, ticket: any) {
-  const link = `${APP_URL}/tickets`;
-  const intro =
-    event === "created"  ? "A new support ticket has been raised." :
-    event === "assigned" ? "A ticket has been assigned to you." :
-    event === "resolved" ? "Your support ticket has been resolved." :
-                           "A ticket you are involved with was updated.";
-  return `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
-      <h2 style="margin:0 0 12px;color:#0f172a;">SOPAssist AI — Ticket Update</h2>
-      <p style="margin:0 0 16px;color:#475569;">${intro}</p>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:16px 0;">
-        <div style="font-size:12px;color:#64748b;margin-bottom:4px;">Ticket #${ticket.id.slice(0,8)} · ${ticket.category} · ${ticket.priority}</div>
-        <div style="font-weight:600;color:#0f172a;margin-bottom:8px;">Status: ${ticket.status.replace("_"," ")}</div>
-        <div style="white-space:pre-wrap;color:#1e293b;font-size:14px;">${escapeHtml(ticket.query)}</div>
-        ${ticket.resolution_notes ? `<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0"/><div style="font-size:13px;color:#334155;"><strong>Resolution:</strong><br/>${escapeHtml(ticket.resolution_notes)}</div>` : ""}
-      </div>
-      <a href="${link}" style="display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-size:14px;">Open Ticket</a>
-      <p style="margin-top:24px;font-size:12px;color:#94a3b8;">SOPAssist AI · Banking Knowledge Assistant</p>
-    </div>
-  `;
-}
-
-function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]!));
-}
-
-async function sendViaResend(to: string[], subject: string, html: string) {
-  const RESEND_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM = Deno.env.get("TICKET_FROM_EMAIL") || "SOPAssist <onboarding@resend.dev>";
-  if (!RESEND_KEY) {
-    console.log("[notify-ticket] RESEND_API_KEY not set — skipping email send to:", to);
-    return { skipped: true };
-  }
-  const res = await fetch("https://api.resend.com/emails", {
+async function sendViaGmail(to: string, subject: string, html: string, ticketId: string, purpose: string) {
+  const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email-gmail`;
+  const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${RESEND_KEY}`,
       "Content-Type": "application/json",
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
     },
-    body: JSON.stringify({ from: FROM, to, subject, html }),
+    body: JSON.stringify({ to, subject, html, ticket_id: ticketId, purpose }),
   });
   if (!res.ok) {
     const txt = await res.text();
-    console.error("[notify-ticket] Resend error:", res.status, txt);
+    console.error(`[notify-ticket] Gmail send to ${to} failed:`, txt);
     return { error: txt };
   }
   return await res.json();
@@ -104,10 +68,12 @@ serve(async (req) => {
       });
     }
 
-    // Determine recipients
+    // Determine recipients + render template
     const recipients = new Set<string>();
+    let template: { subject: string; html: string };
+    let purpose = "ticket_updated";
+
     if (body.event === "created") {
-      // Notify all admins + SMEs
       const { data: roles } = await supabase
         .from("user_roles")
         .select("user_id")
@@ -117,11 +83,39 @@ serve(async (req) => {
         const { data } = await supabase.auth.admin.getUserById(id);
         if (data?.user?.email) recipients.add(data.user.email);
       }
+      template = ticketCreatedEmail(ticket);
+      purpose = "ticket_created";
     } else if (body.event === "assigned" && ticket.assigned_to) {
       const { data } = await supabase.auth.admin.getUserById(ticket.assigned_to);
       if (data?.user?.email) recipients.add(data.user.email);
+      template = ticketAssignedEmail(ticket);
+      purpose = "ticket_assigned";
     } else if (body.event === "resolved" && ticket.user_email) {
       recipients.add(ticket.user_email);
+      template = ticketResolvedEmail(ticket);
+      purpose = "ticket_resolved";
+    } else if (body.event === "qa_submitted" && body.qa_id) {
+      const { data: qa } = await supabase
+        .from("ticket_qa")
+        .select("*")
+        .eq("id", body.qa_id)
+        .single();
+      if (!qa) {
+        return new Response(JSON.stringify({ error: "QA not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Requester rating → notify the assignee/admin team
+      // Admin review → notify the requester
+      if (qa.qa_type === "admin_review" && ticket.user_email) {
+        recipients.add(ticket.user_email);
+      } else if (qa.qa_type === "requester_rating" && ticket.assigned_to_email) {
+        recipients.add(ticket.assigned_to_email);
+      }
+      template = qaSubmittedEmail(ticket, qa);
+      purpose = "qa_submitted";
+    } else {
+      template = ticketUpdatedEmail(ticket);
     }
 
     if (recipients.size === 0) {
@@ -130,13 +124,13 @@ serve(async (req) => {
       });
     }
 
-    const result = await sendViaResend(
-      Array.from(recipients),
-      subjectFor(body.event, ticket.id),
-      htmlBody(body.event, ticket)
+    const results = await Promise.all(
+      Array.from(recipients).map((to) =>
+        sendViaGmail(to, template.subject, template.html, ticket.id, purpose)
+      )
     );
 
-    return new Response(JSON.stringify({ ok: true, recipients: Array.from(recipients), result }), {
+    return new Response(JSON.stringify({ ok: true, recipients: Array.from(recipients), results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {

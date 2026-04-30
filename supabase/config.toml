@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.parse-document]
 verify_jwt = false
+
+[functions.send-email-gmail]
+verify_jwt = false
+
+[functions.notify-ticket]
+verify_jwt = false

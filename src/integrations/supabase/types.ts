@@ -153,6 +153,45 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          created_at: string
+          error: string | null
+          gmail_message_id: string | null
+          id: string
+          purpose: string
+          status: string
+          subject: string
+          ticket_id: string | null
+          to_email: string
+          triggered_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          purpose: string
+          status: string
+          subject: string
+          ticket_id?: string | null
+          to_email: string
+          triggered_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          purpose?: string
+          status?: string
+          subject?: string
+          ticket_id?: string | null
+          to_email?: string
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           category: string | null
