@@ -75,20 +75,27 @@ export function TicketQAPanel({
       return;
     }
     setSubmittingRating(true);
-    const { error } = await supabase.from("ticket_qa" as any).insert({
+    const { data: inserted, error } = await supabase.from("ticket_qa" as any).insert({
       ticket_id: ticketId,
       qa_type: "requester_rating",
       reviewer_id: user!.id,
       reviewer_email: user!.email,
       rating,
       comment: ratingComment || null,
-    });
+    }).select("id").single();
     setSubmittingRating(false);
     if (error) {
       toast.error(error.message);
       return;
     }
     toast.success("Thanks for your feedback!");
+    if (inserted?.id) {
+      supabase.functions
+        .invoke("notify-ticket", {
+          body: { event: "qa_submitted", ticket_id: ticketId, qa_id: inserted.id },
+        })
+        .catch(() => {});
+    }
     setRating(0);
     setRatingComment("");
     load();
@@ -97,14 +104,14 @@ export function TicketQAPanel({
 
   const submitReview = async () => {
     setSubmittingReview(true);
-    const { error } = await supabase.from("ticket_qa" as any).insert({
+    const { data: inserted, error } = await supabase.from("ticket_qa" as any).insert({
       ticket_id: ticketId,
       qa_type: "admin_review",
       reviewer_id: user!.id,
       reviewer_email: user!.email,
       verdict,
       comment: reviewNotes || null,
-    });
+    }).select("id").single();
     setSubmittingReview(false);
     if (error) {
       toast.error(error.message);
@@ -113,6 +120,13 @@ export function TicketQAPanel({
     toast.success(
       verdict === "needs_rework" ? "Ticket reopened for rework" : "QA approved"
     );
+    if (inserted?.id) {
+      supabase.functions
+        .invoke("notify-ticket", {
+          body: { event: "qa_submitted", ticket_id: ticketId, qa_id: inserted.id },
+        })
+        .catch(() => {});
+    }
     setReviewNotes("");
     load();
     onChanged?.();
