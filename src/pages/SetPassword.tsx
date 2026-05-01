@@ -19,9 +19,21 @@ export default function SetPassword() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Surface explicit errors that Supabase puts in the URL hash
+    // (e.g. otp_expired, access_denied) before we wait on a session.
+    if (typeof window !== "undefined" && window.location.hash) {
+      const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const err = params.get("error_description") || params.get("error");
+      if (err) {
+        setLinkError(decodeURIComponent(err.replace(/\+/g, " ")));
+        return;
+      }
+    }
+
     // Supabase invite/recovery links arrive with a token in the URL hash.
     // The supabase client picks it up automatically (detectSessionInUrl), but
     // we listen to onAuthStateChange to react reliably.
@@ -130,9 +142,30 @@ export default function SetPassword() {
           </div>
 
           {!ready ? (
-            <div className="text-sm text-muted-foreground py-4 text-center">
-              Verifying your invitation link…
-            </div>
+            linkError ? (
+              <div className="space-y-3 py-2">
+                <div className="text-sm text-destructive">
+                  Your invitation link is no longer valid:
+                  <div className="mt-1 text-foreground font-medium">{linkError}</div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Invite links expire for security. Please ask your admin to send
+                  a fresh invitation, then click the new link from that email.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate("/login")}
+                >
+                  Go to sign in
+                </Button>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground py-4 text-center">
+                Verifying your invitation link…
+              </div>
+            )
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
