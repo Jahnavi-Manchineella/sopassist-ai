@@ -48,6 +48,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, isLoading } = useAuth();
   if (isLoading) return null;
   if (user && isAdmin) return <Navigate to="/documents" replace />;
+  if (user) return <Navigate to="/tickets" replace />;
   return <>{children}</>;
 }
 
