@@ -13,8 +13,17 @@ const corsHeaders = {
 interface Body {
   email: string;
   full_name?: string;
-  role?: "admin" | "sme" | "user";
+  role?: "admin" | "sme" | "process_manager" | "process_analyst" | "senior_manager" | "user";
 }
+
+const VALID_ROLES = [
+  "admin",
+  "sme",
+  "process_manager",
+  "process_analyst",
+  "senior_manager",
+  "user",
+] as const;
 
 const APP_URL = "https://sopassist-ai.lovable.app";
 const SET_PASSWORD_PATH = "/set-password";
@@ -95,7 +104,7 @@ serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!["admin", "sme", "user"].includes(role)) {
+    if (!VALID_ROLES.includes(role as any)) {
       return new Response(JSON.stringify({ error: "Invalid role" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
