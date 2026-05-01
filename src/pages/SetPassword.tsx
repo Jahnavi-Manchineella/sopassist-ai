@@ -22,24 +22,48 @@ export default function SetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // The auth client picks up the token from the URL hash on load.
+    // Supabase invite/recovery links arrive with a token in the URL hash.
+    // The supabase client picks it up automatically (detectSessionInUrl), but
+    // we listen to onAuthStateChange to react reliably.
     let cancelled = false;
+    let timer: number | undefined;
+
+    const sub = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (session?.user) {
+        setEmail(session.user.email ?? null);
+        setReady(true);
+      }
+    });
+
     (async () => {
-      // Give detectSessionInUrl a tick to run.
-      await new Promise((r) => setTimeout(r, 50));
+      // First check: maybe the session is already established.
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (data.session?.user) {
         setEmail(data.session.user.email ?? null);
         setReady(true);
-      } else {
-        toast.error(
-          "Invitation link is invalid or has expired. Please ask your admin to resend the invite."
-        );
+        return;
       }
+      // If still no session after a short wait, the link is invalid/expired.
+      timer = window.setTimeout(async () => {
+        if (cancelled) return;
+        const { data: again } = await supabase.auth.getSession();
+        if (again.session?.user) {
+          setEmail(again.session.user.email ?? null);
+          setReady(true);
+        } else {
+          toast.error(
+            "Invitation link is invalid or has expired. Ask your admin to resend the invite."
+          );
+        }
+      }, 1500);
     })();
+
     return () => {
       cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      sub.data.subscription.unsubscribe();
     };
   }, []);
 
