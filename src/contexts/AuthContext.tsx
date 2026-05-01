@@ -30,7 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("user_id", userId);
     const roles = data?.map((r) => r.role) ?? [];
     setIsAdmin(roles.includes("admin" as any));
-    setIsSme(roles.includes("sme" as any));
+    // Treat all non-admin operational roles as "SME-like" for ticket access etc.
+    const smeLike = ["sme", "process_manager", "process_analyst", "senior_manager"];
+    setIsSme(roles.some((r: any) => smeLike.includes(r)));
   };
 
   useEffect(() => {

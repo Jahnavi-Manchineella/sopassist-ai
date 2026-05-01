@@ -17,6 +17,7 @@ interface Body {
 }
 
 const APP_URL = "https://sopassist-ai.lovable.app";
+const SET_PASSWORD_PATH = "/set-password";
 
 function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 254;
@@ -105,7 +106,7 @@ serve(async (req) => {
       type: "invite",
       email,
       options: {
-        redirectTo: `${APP_URL}/login`,
+        redirectTo: `${APP_URL}${SET_PASSWORD_PATH}`,
         data: fullName ? { full_name: fullName } : undefined,
       },
     });
@@ -124,7 +125,7 @@ serve(async (req) => {
       const { data: recoverData, error: recoverErr } = await admin.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo: `${APP_URL}/login` },
+        options: { redirectTo: `${APP_URL}${SET_PASSWORD_PATH}` },
       });
       if (recoverErr) throw recoverErr;
       inviteUrl = recoverData?.properties?.action_link ?? null;
