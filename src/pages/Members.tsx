@@ -21,9 +21,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserCog, Search, RefreshCw, UserPlus, Mail } from "lucide-react";
+import { Shield, UserCog, Search, RefreshCw, UserPlus, Mail, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-type AppRole = "admin" | "sme" | "user";
+type AppRole =
+  | "admin"
+  | "sme"
+  | "process_manager"
+  | "process_analyst"
+  | "senior_manager";
+
+const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
+  { value: "admin", label: "Admin" },
+  { value: "sme", label: "SME" },
+  { value: "process_manager", label: "Process Manager" },
+  { value: "process_analyst", label: "Process Analyst" },
+  { value: "senior_manager", label: "Senior Manager" },
+];
+
+const ROLE_LABEL: Record<AppRole, string> = {
+  admin: "Admin",
+  sme: "SME",
+  process_manager: "Process Manager",
+  process_analyst: "Process Analyst",
+  senior_manager: "Senior Manager",
+};
 
 interface MemberRow {
   user_id: string;
@@ -59,8 +91,12 @@ export default function Members() {
       map.set(p.user_id, { user_id: p.user_id, full_name: p.full_name, roles: [] })
     );
     (roles || []).forEach((r) => {
-      const row = map.get(r.user_id) || { user_id: r.user_id, full_name: null, roles: [] };
-      row.roles.push(r.role as AppRole);
+      const row =
+        map.get(r.user_id) || { user_id: r.user_id, full_name: null, roles: [] };
+      // Hide the legacy 'user' role from the UI — only banking ops roles surface.
+      if ((ROLE_OPTIONS as { value: string }[]).some((o) => o.value === r.role)) {
+        row.roles.push(r.role as AppRole);
+      }
       map.set(r.user_id, row);
     });
     setMembers(Array.from(map.values()));
@@ -106,7 +142,27 @@ export default function Members() {
   const ROLE_STYLE: Record<AppRole, string> = {
     admin: "bg-accent/15 text-accent border-accent/30",
     sme: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    user: "bg-muted text-muted-foreground border-border",
+    process_manager: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    process_analyst: "bg-violet-500/15 text-violet-400 border-violet-500/30",
+    senior_manager: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  };
+
+  const removeMember = async (m: MemberRow) => {
+    setBusy(m.user_id + ":delete");
+    // Remove all roles; profile row stays for audit. Only an admin RLS lets this through.
+    const { error } = await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", m.user_id);
+    setBusy(null);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(
+      `Removed all roles from ${m.full_name || m.user_id.slice(0, 8)}`
+    );
+    load();
   };
 
   const handleAddMember = async () => {
@@ -243,9 +299,11 @@ export default function Members() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="sme">SME</SelectItem>
-                      <SelectItem value="user">User</SelectItem>
+                      {ROLE_OPTIONS.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -299,8 +357,11 @@ export default function Members() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="sme">SME</SelectItem>
+                      {ROLE_OPTIONS.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -358,7 +419,7 @@ export default function Members() {
                 {m.roles.map((r) => (
                   <Badge key={r} variant="outline" className={ROLE_STYLE[r]}>
                     {r === "admin" && <Shield className="w-3 h-3 mr-1" />}
-                    {r}
+                    {ROLE_LABEL[r]}
                   </Badge>
                 ))}
               </div>
@@ -366,8 +427,8 @@ export default function Members() {
                 {m.user_id}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {(["admin", "sme"] as AppRole[]).map((role) => {
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {ROLE_OPTIONS.map(({ value: role, label }) => {
                 const has = m.roles.includes(role);
                 return (
                   <Button
@@ -377,10 +438,41 @@ export default function Members() {
                     disabled={busy === m.user_id + role}
                     onClick={() => toggleRole(m, role)}
                   >
-                    {has ? `Remove ${role}` : `Make ${role}`}
+                    {has ? `Remove ${label}` : `Make ${label}`}
                   </Button>
                 );
               })}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={busy === m.user_id + ":delete"}
+                    title="Remove all roles for this member"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove member access?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This revokes all roles from{" "}
+                      <strong>{m.full_name || m.user_id.slice(0, 8)}</strong>.
+                      They will no longer be able to access staff areas of the
+                      app. Their account record is preserved for audit
+                      history.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => removeMember(m)}>
+                      Remove access
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         ))}
