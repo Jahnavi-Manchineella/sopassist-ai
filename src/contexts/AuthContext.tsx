@@ -14,7 +14,22 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Use a safe default instead of `undefined` so HMR (which can re-create the
+// context object while an old provider is still mounted) never produces a
+// blank screen with "useAuth must be used within AuthProvider".
+const defaultAuthContext: AuthContextType = {
+  user: null,
+  session: null,
+  isLoading: true,
+  isAdmin: false,
+  isSme: false,
+  isStaff: false,
+  signIn: async () => {},
+  signUp: async () => {},
+  signOut: async () => {},
+};
+
+const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -88,7 +103,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
-  return context;
+  return useContext(AuthContext);
 }
