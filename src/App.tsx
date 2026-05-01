@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import Presentation from "./pages/Presentation";
 import Tickets from "./pages/Tickets";
 import Members from "./pages/Members";
+import SetPassword from "./pages/SetPassword";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+            <Route path="/set-password" element={<SetPassword />} />
             <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
             <Route path="/tickets" element={<AuthenticatedRoute><Tickets /></AuthenticatedRoute>} />
             <Route path="/members" element={<AdminRoute><Members /></AdminRoute>} />
