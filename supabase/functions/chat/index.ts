@@ -72,6 +72,16 @@ serve(async (req) => {
 
     const lastUserMessage = messages[messages.length - 1]?.content || "";
 
+    // === Stellar Horizon API enrichment ===
+    // If the user asks about Stellar / XLM, or includes a Stellar account (G...) or tx hash,
+    // fetch live data from the public Horizon API and add it to the prompt context.
+    let stellarContext = "";
+    try {
+      stellarContext = await fetchStellarContext(lastUserMessage);
+    } catch (e) {
+      console.error("Stellar enrichment error:", e);
+    }
+
     let relevantChunks: any[] = [];
     const categoryFilter = userCategory && userCategory !== "All" ? userCategory : null;
 
@@ -161,7 +171,7 @@ serve(async (req) => {
     const systemPrompt = `You are a Banking AI Knowledge Assistant for internal banking operations teams. You help answer questions about banking procedures, compliance, products, and operations based on internal documents.
 
 ${contextStr ? `Use the following document excerpts to ground your answer. Always cite your sources using [Source N] notation when referencing information from the documents.${contextStr}` : "No relevant documents found in the knowledge base. Answer based on your general banking knowledge but clearly state that no internal documents were found matching the query."}
-
+${stellarContext ? `\nLive Stellar network data (from Horizon public API):\n${stellarContext}\nWhen using this data, label it as "Stellar Horizon (live)" so the user knows it is live network data, not from internal documents.\n` : ""}
 Guidelines:
 - Be professional, accurate, and concise
 - Always cite sources when available using [Source N] format
