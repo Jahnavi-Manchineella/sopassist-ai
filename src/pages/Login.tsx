@@ -5,6 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Bot, Shield } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,6 +21,9 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
@@ -52,6 +64,27 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    setForgotLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/set-password`,
+      });
+      if (error) throw error;
+      toast.success(
+        "If an account exists for that email, a reset link has been sent."
+      );
+      setForgotOpen(false);
+      setForgotEmail("");
+    } catch (err: any) {
+      toast.error(err.message || "Could not send reset email");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
@@ -82,6 +115,53 @@ export default function Login() {
               {loading ? "Please wait..." : "Sign In"}
             </Button>
           </form>
+          <div className="mt-3 text-right">
+            <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="text-xs text-accent hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Reset your password</DialogTitle>
+                  <DialogDescription>
+                    Enter your email and we'll send you a link to set a new
+                    password.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">Email</Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="you@bank.com"
+                      required
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setForgotOpen(false)}
+                      disabled={forgotLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={forgotLoading}>
+                      {forgotLoading ? "Sending..." : "Send reset link"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
           <p className="mt-4 text-xs text-muted-foreground text-center">
             Access is granted by invitation. Use the link in your invite email to set your password.
           </p>
