@@ -8,6 +8,100 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Citations, X-Category",
 };
 
+// === Stellar Horizon (public API, no key required) =================
+const HORIZON_URL = "https://horizon.stellar.org";
+
+async function horizonGet(path: string): Promise<any | null> {
+  try {
+    const res = await fetch(`${HORIZON_URL}${path}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.error("Horizon error", path, res.status);
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.error("Horizon fetch failed", path, e);
+    return null;
+  }
+}
+
+/**
+ * Detect Stellar references in the user query and pull live data from Horizon.
+ * Triggers:
+ *  - Stellar account ID (G + 55 base32 chars)
+ *  - Transaction hash (64 hex chars)
+ *  - Mentions of "stellar", "xlm", "lumens", "horizon"
+ */
+async function fetchStellarContext(query: string): Promise<string> {
+  if (!query) return "";
+
+  const accountMatch = query.match(/\bG[A-Z2-7]{55}\b/);
+  const txMatch = query.match(/\b[a-fA-F0-9]{64}\b/);
+  const mentionsStellar = /\b(stellar|xlm|lumen[s]?|horizon)\b/i.test(query);
+
+  if (!accountMatch && !txMatch && !mentionsStellar) return "";
+
+  const parts: string[] = [];
+
+  if (accountMatch) {
+    const acc = await horizonGet(`/accounts/${accountMatch[0]}`);
+    if (acc) {
+      const balances = (acc.balances || [])
+        .map((b: any) =>
+          `${b.balance} ${b.asset_type === "native" ? "XLM" : (b.asset_code || b.asset_type)}`
+        )
+        .join(", ");
+      parts.push(
+        `Account ${acc.account_id}\n` +
+          `  Sequence: ${acc.sequence}\n` +
+          `  Subentry count: ${acc.subentry_count}\n` +
+          `  Balances: ${balances || "none"}`
+      );
+    } else {
+      parts.push(`Account ${accountMatch[0]} was not found on the Stellar public network.`);
+    }
+  }
+
+  if (txMatch) {
+    const tx = await horizonGet(`/transactions/${txMatch[0]}`);
+    if (tx) {
+      parts.push(
+        `Transaction ${tx.hash}\n` +
+          `  Ledger: ${tx.ledger}\n` +
+          `  Successful: ${tx.successful}\n` +
+          `  Source account: ${tx.source_account}\n` +
+          `  Fee charged: ${tx.fee_charged} stroops\n` +
+          `  Operation count: ${tx.operation_count}\n` +
+          `  Created at: ${tx.created_at}`
+      );
+    }
+  }
+
+  // Always include a small network snapshot when Stellar is in scope
+  const ledgers = await horizonGet(`/ledgers?order=desc&limit=1`);
+  const latest = ledgers?._embedded?.records?.[0];
+  if (latest) {
+    parts.push(
+      `Latest ledger: #${latest.sequence} at ${latest.closed_at} ` +
+        `(${latest.operation_count} ops, ${latest.successful_transaction_count} successful tx).`
+    );
+  }
+
+  if (mentionsStellar && !accountMatch && !txMatch) {
+    const fee = await horizonGet(`/fee_stats`);
+    if (fee) {
+      parts.push(
+        `Network fee stats: last ledger base fee ${fee.last_ledger_base_fee} stroops, ` +
+          `fee charged p50 ${fee.fee_charged?.p50}, p90 ${fee.fee_charged?.p90}.`
+      );
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
 // Embed a single query via HuggingFace (sentence-transformers/all-MiniLM-L6-v2)
 async function embedQuery(text: string): Promise<number[] | null> {
   const HF_KEY = Deno.env.get("HUGGINGFACE_API_KEY");
@@ -71,6 +165,16 @@ serve(async (req) => {
     }
 
     const lastUserMessage = messages[messages.length - 1]?.content || "";
+
+    // === Stellar Horizon API enrichment ===
+    // If the user asks about Stellar / XLM, or includes a Stellar account (G...) or tx hash,
+    // fetch live data from the public Horizon API and add it to the prompt context.
+    let stellarContext = "";
+    try {
+      stellarContext = await fetchStellarContext(lastUserMessage);
+    } catch (e) {
+      console.error("Stellar enrichment error:", e);
+    }
 
     let relevantChunks: any[] = [];
     const categoryFilter = userCategory && userCategory !== "All" ? userCategory : null;
@@ -161,7 +265,7 @@ serve(async (req) => {
     const systemPrompt = `You are a Banking AI Knowledge Assistant for internal banking operations teams. You help answer questions about banking procedures, compliance, products, and operations based on internal documents.
 
 ${contextStr ? `Use the following document excerpts to ground your answer. Always cite your sources using [Source N] notation when referencing information from the documents.${contextStr}` : "No relevant documents found in the knowledge base. Answer based on your general banking knowledge but clearly state that no internal documents were found matching the query."}
-
+${stellarContext ? `\nLive Stellar network data (from Horizon public API):\n${stellarContext}\nWhen using this data, label it as "Stellar Horizon (live)" so the user knows it is live network data, not from internal documents.\n` : ""}
 Guidelines:
 - Be professional, accurate, and concise
 - Always cite sources when available using [Source N] format
