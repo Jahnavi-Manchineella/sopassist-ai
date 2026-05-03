@@ -157,7 +157,6 @@ export default function Members() {
 
   const removeMember = async (m: MemberRow) => {
     setBusy(m.user_id + ":delete");
-    // Remove all roles; profile row stays for audit. Only an admin RLS lets this through.
     const { error } = await supabase
       .from("user_roles")
       .delete()
@@ -170,6 +169,20 @@ export default function Members() {
     toast.success(
       `Removed all roles from ${m.full_name || m.user_id.slice(0, 8)}`
     );
+    load();
+  };
+
+  const deleteUserPermanently = async (m: MemberRow) => {
+    setBusy(m.user_id + ":purge");
+    const { data, error } = await supabase.functions.invoke("delete-user", {
+      body: { user_id: m.user_id },
+    });
+    setBusy(null);
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || error?.message || "Failed to delete user");
+      return;
+    }
+    toast.success(`Deleted ${m.full_name || m.user_id.slice(0, 8)}`);
     load();
   };
 
@@ -571,7 +584,7 @@ export default function Members() {
                     title="Remove all roles for this member"
                   >
                     <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
+                    Remove roles
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -589,6 +602,36 @@ export default function Members() {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={() => removeMember(m)}>
                       Remove access
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={busy === m.user_id + ":purge"}
+                    title="Permanently delete this user account"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete user
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Permanently delete user?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently deletes{" "}
+                      <strong>{m.full_name || m.user_id.slice(0, 8)}</strong> —
+                      their auth account, profile, and roles will be removed.
+                      This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => deleteUserPermanently(m)}>
+                      Delete permanently
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
