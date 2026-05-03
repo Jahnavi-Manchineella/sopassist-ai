@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserCog, Search, RefreshCw, UserPlus, Mail, Trash2 } from "lucide-react";
+import { Shield, UserCog, Search, RefreshCw, UserPlus, Mail, Trash2, KeyRound } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,6 +79,14 @@ export default function Members() {
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<AppRole>("admin");
   const [inviting, setInviting] = useState(false);
+
+  // Create-with-password state (manual admin creation)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [createRole, setCreateRole] = useState<AppRole>("admin");
+  const [creating, setCreating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -241,6 +249,39 @@ export default function Members() {
     load();
   };
 
+  const handleCreateUser = async () => {
+    const email = createEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (createPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    setCreating(true);
+    const { data, error } = await supabase.functions.invoke("create-user", {
+      body: {
+        email,
+        password: createPassword,
+        full_name: createName.trim() || undefined,
+        role: createRole,
+      },
+    });
+    setCreating(false);
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || error?.message || "Failed to create user");
+      return;
+    }
+    toast.success(`Created ${email} as ${createRole}`);
+    setCreateOpen(false);
+    setCreateEmail("");
+    setCreatePassword("");
+    setCreateName("");
+    setCreateRole("admin");
+    load();
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -254,9 +295,88 @@ export default function Members() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="default">
+                <KeyRound className="w-4 h-4 mr-2" />
+                Create with Password
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create user manually</DialogTitle>
+                <DialogDescription>
+                  Directly create an account with a password (no email
+                  verification). The user can sign in immediately with these
+                  credentials.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="create-email">Email address</Label>
+                  <Input
+                    id="create-email"
+                    type="email"
+                    placeholder="admin@bank.com"
+                    value={createEmail}
+                    onChange={(e) => setCreateEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-password">Password (min 8 chars)</Label>
+                  <Input
+                    id="create-password"
+                    type="text"
+                    placeholder="Strong password"
+                    value={createPassword}
+                    onChange={(e) => setCreatePassword(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-name">Full name</Label>
+                  <Input
+                    id="create-name"
+                    placeholder="Jane Doe"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select
+                    value={createRole}
+                    onValueChange={(v) => setCreateRole(v as AppRole)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLE_OPTIONS.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateOpen(false)}
+                  disabled={creating}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateUser} disabled={creating}>
+                  {creating ? "Creating…" : "Create user"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
                 <Mail className="w-4 h-4 mr-2" />
                 Invite by Email
               </Button>
