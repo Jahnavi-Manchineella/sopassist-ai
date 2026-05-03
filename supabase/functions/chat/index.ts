@@ -309,14 +309,17 @@ Guidelines:
       throw new Error(`AI gateway error: ${status}`);
     }
 
-    // Log audit entry
-    if (userId) {
-      await supabase.from("audit_logs").insert({
+    // Log audit entry — always store, even for guest (user_id null) chats.
+    try {
+      const { error: auditErr } = await supabase.from("audit_logs").insert({
         user_id: userId,
         query: lastUserMessage,
         retrieved_chunks: citations,
         category,
       });
+      if (auditErr) console.error("audit_logs insert error:", auditErr);
+    } catch (e) {
+      console.error("audit_logs insert exception:", e);
     }
 
     // Return stream with citation headers
