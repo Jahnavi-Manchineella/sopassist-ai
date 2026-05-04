@@ -128,6 +128,32 @@ export function RaiseTicketDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {!user && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="guest-name" className="text-xs">Your name (optional)</Label>
+                <Input
+                  id="guest-name"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Jane Doe"
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="guest-email" className="text-xs">Your email *</Label>
+                <Input
+                  id="guest-email"
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  placeholder="you@bank.com"
+                  className="text-sm"
+                  required
+                />
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="ticket-query" className="text-xs">Your question</Label>
             <Textarea
