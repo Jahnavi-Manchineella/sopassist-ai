@@ -347,6 +347,7 @@ export type Database = {
           context: string | null
           conversation_id: string | null
           created_at: string
+          guest_name: string | null
           id: string
           priority: Database["public"]["Enums"]["ticket_priority"]
           query: string
@@ -355,7 +356,7 @@ export type Database = {
           status: Database["public"]["Enums"]["ticket_status"]
           updated_at: string
           user_email: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           assigned_at?: string | null
@@ -367,6 +368,7 @@ export type Database = {
           context?: string | null
           conversation_id?: string | null
           created_at?: string
+          guest_name?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["ticket_priority"]
           query: string
@@ -375,7 +377,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["ticket_status"]
           updated_at?: string
           user_email?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           assigned_at?: string | null
@@ -387,6 +389,7 @@ export type Database = {
           context?: string | null
           conversation_id?: string | null
           created_at?: string
+          guest_name?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["ticket_priority"]
           query?: string
@@ -395,7 +398,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["ticket_status"]
           updated_at?: string
           user_email?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }

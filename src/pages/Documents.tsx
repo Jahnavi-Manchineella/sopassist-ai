@@ -40,6 +40,7 @@ export default function Documents() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [sharepointUrl, setSharepointUrl] = useState("");
   const [urlLoading, setUrlLoading] = useState(false);
+  const [activeKB, setActiveKB] = useState<string>("All");
 
   const loadDocs = async () => {
     const { data } = await supabase
@@ -253,10 +254,18 @@ export default function Documents() {
 
   const filtered = documents.filter(
     (d) =>
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.category.toLowerCase().includes(search.toLowerCase()) ||
-      d.file_type.toLowerCase().includes(search.toLowerCase())
+      (activeKB === "All" || d.category === activeKB) &&
+      (
+        d.name.toLowerCase().includes(search.toLowerCase()) ||
+        d.category.toLowerCase().includes(search.toLowerCase()) ||
+        d.file_type.toLowerCase().includes(search.toLowerCase())
+      )
   );
+
+  const kbCounts = ["All", ...CATEGORIES].reduce<Record<string, number>>((acc, k) => {
+    acc[k] = k === "All" ? documents.length : documents.filter((d) => d.category === k).length;
+    return acc;
+  }, {});
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
@@ -346,6 +355,24 @@ export default function Documents() {
             placeholder="Search documents by name, category, or type..."
             className="pl-10 bg-secondary/50 border-border/50"
           />
+        </div>
+
+        {/* Knowledge base tabs */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {["All", ...CATEGORIES].map((kb) => (
+            <button
+              key={kb}
+              onClick={() => setActiveKB(kb)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                activeKB === kb
+                  ? "bg-primary/15 text-primary border-primary/40"
+                  : "bg-secondary/40 text-muted-foreground border-border/50 hover:text-foreground"
+              }`}
+            >
+              {kb === "All" ? "All Knowledge" : kb}
+              <span className="ml-1.5 opacity-70">({kbCounts[kb] ?? 0})</span>
+            </button>
+          ))}
         </div>
 
         {/* Documents list */}

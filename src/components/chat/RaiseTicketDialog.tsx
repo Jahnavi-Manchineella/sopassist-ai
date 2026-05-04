@@ -21,7 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LifeBuoy } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Input } from "@/components/ui/input";
 
 interface RaiseTicketDialogProps {
   open: boolean;
@@ -44,12 +44,13 @@ export function RaiseTicketDialog({
   assistantResponse,
 }: RaiseTicketDialogProps) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [editedQuery, setEditedQuery] = useState(query);
   const [selectedCategory, setSelectedCategory] = useState(category);
   const [priority, setPriority] = useState<(typeof PRIORITIES)[number]>("medium");
   const [extraContext, setExtraContext] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
 
   // Reset when reopened with new query
   useState(() => {
@@ -58,19 +59,20 @@ export function RaiseTicketDialog({
   });
 
   const handleSubmit = async () => {
-    if (!user) {
-      toast.error("Please sign in to raise a ticket");
-      onOpenChange(false);
-      navigate("/login");
-      return;
-    }
     if (!editedQuery.trim()) {
       toast.error("Question cannot be empty");
       return;
     }
+    if (!user) {
+      if (!guestEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) {
+        toast.error("Please enter a valid email so we can follow up");
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const context = [
+        !user && guestName && `Guest name: ${guestName}`,
         extraContext && `Additional context from user:\n${extraContext}`,
         assistantResponse && `Assistant's previous answer:\n${assistantResponse}`,
       ]
@@ -80,14 +82,15 @@ export function RaiseTicketDialog({
       const { data: ticket, error } = await supabase
         .from("tickets")
         .insert({
-          user_id: user.id,
-          user_email: user.email,
+          user_id: user?.id ?? null,
+          user_email: user?.email ?? guestEmail.trim(),
+          guest_name: !user ? (guestName.trim() || null) : null,
           query: editedQuery.trim(),
           context: context || null,
           category: selectedCategory,
           priority,
           conversation_id: conversationId || null,
-        })
+        } as any)
         .select("id")
         .single();
 
@@ -125,6 +128,32 @@ export function RaiseTicketDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {!user && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="guest-name" className="text-xs">Your name (optional)</Label>
+                <Input
+                  id="guest-name"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Jane Doe"
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="guest-email" className="text-xs">Your email *</Label>
+                <Input
+                  id="guest-email"
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  placeholder="you@bank.com"
+                  className="text-sm"
+                  required
+                />
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="ticket-query" className="text-xs">Your question</Label>
             <Textarea
