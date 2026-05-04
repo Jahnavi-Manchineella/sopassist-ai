@@ -77,7 +77,7 @@ serve(async (req) => {
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const category = (formData.get("category") as string) || "General Operations";
+    let category = (formData.get("category") as string) || "Auto";
     const parentDocId = formData.get("parent_document_id") as string | null;
     const version = parseInt((formData.get("version") as string) || "1", 10);
 
@@ -180,6 +180,16 @@ serve(async (req) => {
       }
     }
 
+    // Auto-classify with LLM if requested (or always when category missing)
+    if (category === "Auto" || !category) {
+      try {
+        category = await classifyCategory(LOVABLE_API_KEY, fileName, extractedText);
+      } catch (e) {
+        console.error("Auto classify failed:", e);
+        category = "General Operations";
+      }
+    }
+
     // Upload original file to storage
     const storagePath = `${user.id}/${Date.now()}_${fileName}`;
     await supabase.storage.from("documents").upload(storagePath, file, {
@@ -240,6 +250,7 @@ serve(async (req) => {
         name: fileName,
         chunks: chunks.length,
         textLength: extractedText.length,
+        category,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -253,6 +264,59 @@ serve(async (req) => {
     });
   }
 });
+
+// Classify a document into one of the four banking knowledge-base domains using Lovable AI.
+async function classifyCategory(apiKey: string, fileName: string, text: string): Promise<string> {
+  const ALLOWED = ["Compliance", "SOP", "Products", "General Operations"];
+  const sample = text.slice(0, 6000);
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-lite",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You classify internal banking documents into exactly one knowledge-base domain. " +
+            "Domains:\n" +
+            "- Compliance: regulations, AML/KYC, audit, GDPR, risk, sanctions, policies enforcing rules.\n" +
+            "- SOP: step-by-step procedures, workflows, how-to guides, operational instructions.\n" +
+            "- Products: account types, loans, cards, deposits, mortgages, savings, product specs.\n" +
+            "- General Operations: anything else operational that doesn't fit the other three.",
+        },
+        {
+          role: "user",
+          content: `Filename: ${fileName}\n\nDocument excerpt:\n${sample}`,
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "set_category",
+            description: "Pick the best-fit domain for this document.",
+            parameters: {
+              type: "object",
+              properties: {
+                category: { type: "string", enum: ALLOWED },
+              },
+              required: ["category"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "set_category" } },
+    }),
+  });
+  if (!res.ok) throw new Error(`classify status ${res.status}`);
+  const data = await res.json();
+  const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  if (!args) return "General Operations";
+  const parsed = JSON.parse(args);
+  return ALLOWED.includes(parsed.category) ? parsed.category : "General Operations";
+}
 
 // Simple EML parser for text-based email files
 function parseEml(emlText: string): string {
