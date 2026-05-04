@@ -18,7 +18,7 @@ interface Doc {
   parent_document_id: string | null;
 }
 
-const CATEGORIES = ["Compliance", "SOP", "Products", "General Operations"];
+const CATEGORIES = ["Auto", "Compliance", "SOP", "Products", "General Operations"];
 const ACCEPTED_TYPES = ".txt,.pdf,.docx,.jpg,.jpeg,.png,.webp,.eml,.msg,.csv,.xlsx,.xls";
 const ALLOWED_EXTENSIONS = ["txt", "pdf", "docx", "jpg", "jpeg", "png", "webp", "eml", "msg", "csv", "xlsx", "xls"];
 
@@ -33,7 +33,7 @@ export default function Documents() {
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("SOP");
+  const [selectedCategory, setSelectedCategory] = useState("Auto");
   const [previewDoc, setPreviewDoc] = useState<Doc | null>(null);
   const [showVersions, setShowVersions] = useState(false);
   const [versionHistory, setVersionHistory] = useState<Doc[]>([]);
@@ -94,12 +94,38 @@ export default function Documents() {
         }
       }
 
+      // Helper: ask edge function to classify text content
+      const classify = async (text: string, fname: string): Promise<string> => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+          const res = await fetch(
+            `https://${projectId}.supabase.co/functions/v1/classify-document`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session?.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ filename: fname, text: text.slice(0, 6000) }),
+            }
+          );
+          const j = await res.json();
+          return j.category || "General Operations";
+        } catch {
+          return "General Operations";
+        }
+      };
+
+      const isAuto = selectedCategory === "Auto";
+
       if (fileExt === "txt") {
         const content = await file.text();
+        const finalCategory = isAuto ? await classify(content, file.name) : selectedCategory;
         const insertData: any = {
           name: file.name,
           file_type: "txt",
-          category: selectedCategory,
+          category: finalCategory,
           content,
           version: newVersion,
           is_latest: true,
@@ -119,15 +145,16 @@ export default function Documents() {
           return { document_id: doc.id, chunk_index: i, content: p.trim(), section_title: isTitle ? firstLine.trim() : null };
         });
         if (chunks.length > 0) await supabase.from("document_chunks").insert(chunks);
-        toast.success(`Uploaded "${file.name}" v${newVersion} with ${chunks.length} chunks`);
+        toast.success(`Uploaded "${file.name}" → ${finalCategory} (v${newVersion}, ${chunks.length} chunks)`);
       } else if (fileExt === "csv") {
         // Process CSV client-side
         const csvText = await file.text();
         const content = `CSV Data: ${file.name}\n\n${csvText}`;
+        const finalCategory = isAuto ? await classify(content, file.name) : selectedCategory;
         const insertData: any = {
           name: file.name,
           file_type: "spreadsheet",
-          category: selectedCategory,
+          category: finalCategory,
           content,
           version: newVersion,
           is_latest: true,
@@ -155,7 +182,7 @@ export default function Documents() {
           });
         }
         if (chunks.length > 0) await supabase.from("document_chunks").insert(chunks);
-        toast.success(`Uploaded "${file.name}" v${newVersion} with ${chunks.length} chunks`);
+        toast.success(`Uploaded "${file.name}" → ${finalCategory} (v${newVersion}, ${chunks.length} chunks)`);
       } else {
         // Send to edge function for AI extraction (PDF, DOCX, images, emails, Excel)
         const formData = new FormData();
@@ -179,7 +206,7 @@ export default function Documents() {
 
         const result = await res.json();
         if (!res.ok) throw new Error(result.error || "Upload failed");
-        toast.success(`Uploaded "${file.name}" v${newVersion} with ${result.chunks} chunks`);
+        toast.success(`Uploaded "${file.name}" → ${result.category || selectedCategory} (v${newVersion}, ${result.chunks} chunks)`);
       }
       loadDocs();
       setShowVersions(false);
